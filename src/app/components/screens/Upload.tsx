@@ -42,82 +42,93 @@ export function Upload() {
   }, [selectedFile]);
 
   const handleUpload = async () => {
-  console.log('handleUpload function called - button clicked');
-  if (!selectedFile) return;
+    console.log('handleUpload function called - button clicked');
+    if (!selectedFile) return;
 
-  setIsUploading(true);
-  setProgress(0);
+    setIsUploading(true);
+    setProgress(0);
 
-  let current = 0;
-  uploadIntervalRef.current = setInterval(() => {
-    current += 10;
-    setProgress(current);
-    if (current >= 100 && uploadIntervalRef.current) {
-      clearInterval(uploadIntervalRef.current);
+    let current = 0;
+    uploadIntervalRef.current = setInterval(() => {
+      current += 10;
+      setProgress(current);
+      if (current >= 100 && uploadIntervalRef.current) {
+        clearInterval(uploadIntervalRef.current);
+      }
+    }, 300);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      console.log("Sending upload request to backend at http://localhost:5000/api/upload");
+      const res = await fetch("http://localhost:5000/api/upload", {
+        method: "POST",
+        body: formData
+      });
+      console.log("Upload request completed, parsing response");
+
+      const data = await res.json();
+
+      console.log("Backend response:", data);
+
+      setBackendData(data);
+
+    } catch (err) {
+      console.error("Upload error:", err);
     }
-  }, 300);
 
-  try {
-    const formData = new FormData();
-    formData.append("file", selectedFile);
-
-    const res = await fetch("http://localhost:5000/api/upload", {
-      method: "POST",
-      body: formData
-    });
-
-    const data = await res.json();
-
-    console.log("Backend response:", data);
-
-    // ✅ CORRECT PLACE
-    setBackendData(data);
-
-  } catch (err) {
-    console.error("Upload error:", err);
-  }
-
-  navigateTimeoutRef.current = setTimeout(() => {
-    navigate('/app/compliance');
-  }, 3500);
-};
+    navigateTimeoutRef.current = setTimeout(() => {
+      navigate('/app/compliance');
+    }, 3500);
+  };
 
   
-const handleDeleteShard = async () => {
-  if (!backendData?.fileId) {
-    console.log("No fileId found");
-    return;
-  }
+  const handleDeleteShard = async () => {
+    if (!backendData?.fileId) {
+      console.log("No fileId found for shard deletion");
+      alert("File ID is missing. Please upload a file first.");
+      return;
+    }
 
-  try {
-    const res = await fetch("http://localhost:5000/api/delete-shard", {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        fileId: backendData.fileId,
-        shardId: "shard-1"
-      })
-    });
+    try {
+      console.log("Sending delete shard request for file:", backendData.fileId);
+      const res = await fetch("http://localhost:5000/api/delete-shard", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          fileId: backendData.fileId,
+          shardId: "shard-1"
+        })
+      });
 
-    const data = await res.json();
-    console.log("Shard delete response:", data);
+      const data = await res.json();
+      console.log("Shard delete response:", data);
 
-  } catch (err) {
-    console.error("Delete error:", err);
-  }
-};
+      if (res.ok) {
+        alert("Shard deleted successfully.");
+      } else {
+        alert(data?.message || "Failed to delete shard.");
+      }
 
-const handleDownload = () => {
-  if (!backendData?.fileId) {
-    alert("File ID is missing. Please upload a file first.");
-    return;
-  }
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("An error occurred while deleting shard.");
+    }
+  };
 
-  console.log("Downloading file with ID:", backendData.fileId);
-  window.open(`http://localhost:5000/api/download/${backendData.fileId}`);
-};
+  const handleDownload = () => {
+    if (!backendData?.fileId) {
+      alert("File ID is missing. Please upload a file first.");
+      return;
+    }
+
+    const downloadUrl = `http://localhost:5000/api/download/${backendData.fileId}`;
+    console.log("Opening download URL:", downloadUrl);
+    window.open(downloadUrl);
+  };
 
 
   const handleUploadAreaClick = () => {

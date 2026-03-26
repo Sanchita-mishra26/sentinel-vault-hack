@@ -1,6 +1,7 @@
 const storage = require("../utils/storage");
 const handleUpload = (req, res) => {
   try {
+    console.log("🔥 UPLOAD CONTROLLER HIT");
     const file = req.file;
 
     if (!file) {

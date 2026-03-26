@@ -1,7 +1,18 @@
 console.log("✅ fileRoutes loaded");
 const express = require("express");
-const router = express.Router();
+const multer = require("multer");
+const { handleUpload } = require("../controllers/uploadController");
 const storage = require("../utils/storage");
+
+const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
+const REQUIRED_SHARDS = 3;
+
+// ✅ UPLOAD ROUTE
+router.post("/upload", upload.single("file"), (req, res) => {
+  console.log("🔥 UPLOAD HIT");
+  handleUpload(req, res);
+});
 
 
 // ✅ DELETE SHARD ROUTE
