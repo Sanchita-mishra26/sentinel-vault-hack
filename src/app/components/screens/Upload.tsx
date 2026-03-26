@@ -42,6 +42,7 @@ export function Upload() {
   }, [selectedFile]);
 
   const handleUpload = async () => {
+  console.log('handleUpload function called - button clicked');
   if (!selectedFile) return;
 
   setIsUploading(true);
