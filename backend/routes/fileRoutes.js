@@ -46,7 +46,7 @@ router.post("/upload", upload.single("file"), (req, res) => {
 router.get("/download/:fileId", (req, res) => {
   const { fileId } = req.params;
   console.log("🔥 DOWNLOAD HIT");
-  
+
 
   if (!storage.files[fileId]) {
     return res.status(404).send("File not found");
@@ -95,6 +95,31 @@ if (collectedShards.length < REQUIRED_SHARDS) {
 
   res.setHeader("Content-Disposition", `attachment; filename=${file.fileName}`);
   res.send(buffer);
+});
+
+// ✅ STATS ROUTE - Returns real-time system statistics
+router.get("/stats", (req, res) => {
+  console.log("📊 STATS HIT");
+
+  const fileCount = Object.keys(storage.files).length;
+
+  // Calculate total shards across all files
+  let totalShards = 0;
+  Object.values(storage.files).forEach(file => {
+    if (file.shards) {
+      totalShards += file.shards.length;
+    }
+  });
+
+  // Count active nodes (simulate 5 nodes)
+  const activeNodes = 5;
+
+  res.json({
+    filesSecured: fileCount,
+    totalShards: totalShards,
+    activeNodes: activeNodes,
+    timestamp: new Date().toISOString()
+  });
 });
 
 module.exports = router;

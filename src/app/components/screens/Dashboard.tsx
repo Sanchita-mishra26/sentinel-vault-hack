@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ShieldCheck, HardDrive, AlertOctagon, CheckCircle2, Clock, Activity, Zap, Target } from 'lucide-react';
+import { ShieldCheck, HardDrive, AlertOctagon, CheckCircle2, Clock, Activity, Zap, Target, Server, Network, AlertTriangle } from 'lucide-react';
 import { NetworkMap } from '../NetworkMap';
 import { AIAssistant } from '../AIAssistant';
 import { motion, AnimatePresence } from 'motion/react';
@@ -60,10 +60,35 @@ export function Dashboard() {
   const [activeThreatIndex, setActiveThreatIndex] = useState<number>(-1);
   const [activityTrackerIndex, setActivityTrackerIndex] = useState(0);
 
+  // NEW: Real data from backend
+  const [realStats, setRealStats] = useState<{ filesSecured: number; totalShards: number; activeNodes: number } | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
+
   const audioCtxRef = useRef<AudioContext | null>(null);
   const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
   const attackTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // Fetch real stats from backend
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch('http://localhost:5000/api/stats');
+        const data = await res.json();
+        console.log('Dashboard stats:', data);
+        setRealStats(data);
+        setIsLoadingStats(false);
+      } catch (err) {
+        console.error('Failed to fetch stats:', err);
+        setIsLoadingStats(false);
+      }
+    };
+
+    fetchStats();
+    // Refresh stats every 5 seconds
+    const interval = setInterval(fetchStats, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const playBeep = () => {
     if (!audioCtxRef.current) {
@@ -71,18 +96,18 @@ export function Dashboard() {
     }
     const ctx = audioCtxRef.current;
     if (ctx.state === 'suspended') ctx.resume();
-    
+
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    
+
     osc.connect(gain);
     gain.connect(ctx.destination);
-    
+
     osc.type = 'square';
     osc.frequency.setValueAtTime(880, ctx.currentTime);
     gain.gain.setValueAtTime(0.1, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
-    
+
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.5);
   };
@@ -263,7 +288,7 @@ export function Dashboard() {
 
   useEffect(() => {
     const target = {
-      filesSecured: 128,
+      filesSecured: realStats?.filesSecured ?? 0,
       activeNodes: Number(activeNodes),
       integrity: Number(integrity.replace('%', '')),
     };
@@ -283,13 +308,13 @@ export function Dashboard() {
     }, 28);
 
     return () => clearInterval(t);
-  }, [activeNodes, integrity]);
+  }, [activeNodes, integrity, realStats]);
 
   const stats = [
-    { label: 'Files Secured', value: countedStats.filesSecured.toString(), icon: ShieldCheck, color: 'text-brand-primary' },
+    { label: 'Files Secured', value: isLoadingStats ? '...' : countedStats.filesSecured.toString(), icon: ShieldCheck, color: 'text-brand-primary' },
+    { label: 'Total Shards', value: isLoadingStats ? '...' : (realStats?.totalShards ?? 0).toString(), icon: Server, color: 'text-emerald-400' },
     { label: 'Active Nodes', value: countedStats.activeNodes.toString(), icon: HardDrive, color: 'text-brand-accent' },
     { label: 'Threat Level', value: attackState === 'attacked' ? 'CRITICAL' : (attackState === 'isolated' || attackState === 'recovering' ? 'ELEVATED' : 'LOW'), icon: AlertOctagon, color: alertsColor },
-    { label: 'System Integrity', value: `${countedStats.integrity}%`, icon: CheckCircle2, color: integrityColor },
   ];
 
   const pieData = [
@@ -305,6 +330,55 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6 relative min-h-full pb-6">
+      {/* ENHANCED: System Status Bar at Top */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="glass-card rounded-2xl p-4 bg-gradient-to-r from-slate-950/90 via-brand-bg/80 to-slate-900/90 border border-brand-border/60"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-brand-primary/15 border border-brand-primary/40 flex items-center justify-center">
+              <Network className="w-5 h-5 text-brand-primary animate-pulse" />
+            </div>
+            <div>
+              <h2 className="text-sm font-heading font-bold text-white">Sentinel Vault Control Panel</h2>
+              <p className="text-[10px] text-slate-400">Real-time system monitoring active</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <motion.span
+              animate={{ opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2, repeat: Infinity }}
+              className="text-[11px] px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:scale-105 transition-transform cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.8)]" />
+              System Active
+            </motion.span>
+            <motion.span
+              animate={{ opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0.3 }}
+              className="text-[11px] px-3 py-1.5 rounded-full border flex items-center gap-2 bg-emerald-500/10 border-emerald-500/40 text-emerald-300 hover:scale-105 transition-transform cursor-pointer"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(74,222,128,0.8)]" />
+              Nodes Online
+            </motion.span>
+            <motion.span
+              animate={{ opacity: [1, 0.7, 1] }}
+              transition={{ duration: 2, repeat: Infinity, delay: 0.6 }}
+              className={`text-[11px] px-3 py-1.5 rounded-full border flex items-center gap-2 hover:scale-105 transition-transform cursor-pointer ${
+                attackState === 'attacked'
+                  ? 'bg-red-500/10 border-red-500/40 text-red-300'
+                  : 'bg-yellow-500/10 border-yellow-500/40 text-yellow-300'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full animate-pulse ${attackState === 'attacked' ? 'bg-red-400 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-yellow-400 shadow-[0_0_8px_rgba(250,204,21,0.8)]'}`} />
+              {attackState === 'attacked' ? 'Threat Critical' : 'Threat Low'}
+            </motion.span>
+          </div>
+        </div>
+      </motion.div>
+
       {/* ALERTS SYSTEM OVERLAY */}
       <AnimatePresence>
         {attackState === 'attacked' && (
@@ -313,7 +387,7 @@ export function Dashboard() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-red-950/90 border border-red-500 rounded-2xl p-6 shadow-[0_0_40px_rgba(239,68,68,0.5)] flex flex-col md:flex-row items-center gap-6 backdrop-blur-xl"
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-red-950/90 border border-red-500 rounded-2xl p-6 shadow-[0_0_40px_rgba(239,68,68,0.5)] flex flex-col md:flex-row items-center gap-6 backdrop-blur-xl"
           >
             <div className="flex items-center gap-4">
               <div className="p-3 bg-red-500/20 rounded-full">
@@ -321,48 +395,50 @@ export function Dashboard() {
               </div>
               <span className="font-heading font-bold text-red-500 text-xl tracking-wide uppercase">AI ALERT: Anomaly detected in Node 3</span>
             </div>
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handleIsolate}
-              className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-red-500/50 hover:scale-105 whitespace-nowrap"
+              className="px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-red-500/50"
             >
               Activate Isolation Protocol
-            </button>
+            </motion.button>
           </motion.div>
         )}
-        
+
         {attackState === 'isolated' && (
           <motion.div
             key="isolated-alert"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 border border-slate-600 rounded-2xl p-6 shadow-xl flex items-center gap-4 backdrop-blur-xl"
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 border border-slate-600 rounded-2xl p-6 shadow-xl flex items-center gap-4 backdrop-blur-xl"
           >
             <Activity className="w-8 h-8 text-slate-400 animate-pulse" />
             <span className="font-heading font-bold text-slate-300 text-lg">Initiating self-healing distributed recovery...</span>
           </motion.div>
         )}
-        
+
         {attackState === 'recovering' && (
           <motion.div
             key="recovering-alert"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-brand-primary/20 border border-brand-primary rounded-2xl p-6 shadow-[0_0_30px_rgba(62,166,255,0.4)] flex items-center gap-4 backdrop-blur-xl"
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-brand-primary/20 border border-brand-primary rounded-2xl p-6 shadow-[0_0_30px_rgba(62,166,255,0.4)] flex items-center gap-4 backdrop-blur-xl"
           >
             <Zap className="w-8 h-8 text-brand-primary animate-pulse" />
             <span className="font-heading font-bold text-brand-primary text-lg">Shard Reconstruction in Progress</span>
           </motion.div>
         )}
-        
+
         {attackState === 'recovered' && (
           <motion.div
             key="recovered-alert"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            className="absolute top-4 left-1/2 -translate-x-1/2 z-50 bg-green-500/20 border border-green-500 rounded-2xl p-6 shadow-[0_0_30px_rgba(74,222,128,0.3)] flex items-center gap-4 backdrop-blur-xl"
+            className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-green-500/20 border border-green-500 rounded-2xl p-6 shadow-[0_0_30px_rgba(74,222,128,0.3)] flex items-center gap-4 backdrop-blur-xl"
           >
             <CheckCircle2 className="w-8 h-8 text-green-400" />
             <span className="font-heading font-bold text-green-400 text-lg">Self-Healing Recovery Successful. System Integrity Restored.</span>
@@ -376,7 +452,7 @@ export function Dashboard() {
           initial={{ opacity: 0, scale: 0.97 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.1, duration: 0.5 }}
-          className="glass-card rounded-2xl p-6 xl:col-span-3 bg-gradient-to-br from-slate-950/80 via-brand-bg/70 to-slate-900/80 border border-brand-border/60 relative overflow-hidden"
+          className="glass-card rounded-2xl p-6 xl:col-span-3 bg-gradient-to-br from-slate-950/80 via-brand-bg/70 to-slate-900/80 border border-brand-border/60 relative overflow-hidden hover:shadow-[0_0_30px_rgba(62,166,255,0.15)] transition-shadow duration-300"
         >
           {attackState === 'attacked' && (
             <div className="absolute inset-0 bg-red-500/5 pointer-events-none" />
@@ -399,13 +475,15 @@ export function Dashboard() {
             </div>
             <div className="flex items-center gap-3">
               {(attackState === 'idle' || attackState === 'recovered') && (
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.05, boxShadow: '0 0 20px rgba(239,68,68,0.4)' }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={handleSimulate}
                   className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-red-500/10 border border-red-500/40 text-red-300 flex items-center gap-1.5 hover:bg-red-500/20 transition-colors"
                 >
                   <Target className="w-3 h-3" />
                   Simulate Attack
-                </button>
+                </motion.button>
               )}
               <span
                 className={`text-[11px] px-3 py-1 rounded-full border flex items-center gap-2 ${
@@ -432,26 +510,6 @@ export function Dashboard() {
                   : 'Threat Level: LOW'}
               </span>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 mb-3 relative z-10">
-            {[
-              { label: 'System Active', danger: attackState === 'attacked' },
-              { label: 'Nodes Online', danger: false },
-              { label: 'Threat Low', danger: attackState === 'attacked' },
-            ].map((item) => (
-              <span
-                key={item.label}
-                className={`text-[10px] px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${
-                  item.danger
-                    ? 'bg-red-500/10 border-red-500/40 text-red-300'
-                    : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
-                }`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${item.danger ? 'bg-red-400' : 'bg-emerald-400'}`} />
-                {item.danger && item.label === 'Threat Low' ? 'Threat Detected' : item.label}
-              </span>
-            ))}
           </div>
 
           <div className="mt-2 rounded-2xl border border-brand-border/50 bg-gradient-to-b from-slate-950/70 via-brand-bg/60 to-slate-900/80 overflow-hidden relative">
@@ -509,24 +567,30 @@ export function Dashboard() {
 
                 return (
                   <React.Fragment key={`hotspot-${node.id}`}>
-                    <button
+                    <motion.button
                       type="button"
+                      whileHover={{ scale: 1.3 }}
+                      whileTap={{ scale: 1.1 }}
                       onMouseEnter={() => setHoveredNodeId(node.id)}
                       onMouseLeave={() => setHoveredNodeId((prev) => (prev === node.id ? null : prev))}
                       onClick={() => setSelectedNodeId(node.id)}
                       className={`absolute -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full transition-all duration-300 ${
                         isHighlighted
-                          ? 'bg-brand-primary/40 border border-brand-primary shadow-[0_0_20px_rgba(62,166,255,0.8)] scale-125'
-                          : 'bg-emerald-400/40 border border-emerald-300/70 shadow-[0_0_12px_rgba(74,222,128,0.65)] hover:scale-110'
+                          ? 'bg-brand-primary/40 border border-brand-primary shadow-[0_0_20px_rgba(62,166,255,0.8)]'
+                          : node.state === 'critical'
+                          ? 'bg-red-500/40 border border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.65)]'
+                          : 'bg-emerald-400/40 border border-emerald-300/70 shadow-[0_0_12px_rgba(74,222,128,0.65)]'
                       }`}
                       style={{ left: `${node.x}%`, top: `${node.y}%` }}
                       aria-label={`Inspect ${node.label}`}
                     >
                       <span className={`absolute inset-0 rounded-full ${node.state === 'critical' ? 'bg-red-500/40' : 'bg-emerald-300/30'} animate-ping`} />
-                    </button>
+                    </motion.button>
 
                     {(hoveredNodeId === node.id || selectedNodeId === node.id) && (
-                      <div
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
                         className="absolute rounded-lg border border-brand-primary/40 bg-slate-950/90 backdrop-blur px-3 py-2 text-[10px] text-slate-200 shadow-[0_10px_35px_rgba(2,6,23,0.8)]"
                         style={{ left: `${Math.min(node.x + 3, 86)}%`, top: `${Math.max(node.y - 12, 10)}%` }}
                       >
@@ -534,7 +598,7 @@ export function Dashboard() {
                         <p>Latency: {latency}ms</p>
                         <p>Load: {load}%</p>
                         <p>Status: {status}</p>
-                      </div>
+                      </motion.div>
                     )}
                   </React.Fragment>
                 );
@@ -549,43 +613,68 @@ export function Dashboard() {
         initial={{ opacity: 0, y: 18 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15, duration: 0.5 }}
-        className="glass-card rounded-2xl p-6 bg-gradient-to-br from-slate-950/85 via-brand-bg/80 to-slate-900/85 border border-brand-border/60 space-y-5"
+        className="glass-card rounded-2xl p-6 bg-gradient-to-br from-slate-950/85 via-brand-bg/80 to-slate-900/85 border border-brand-border/60 space-y-5 hover:shadow-[0_0_30px_rgba(62,166,255,0.1)] transition-shadow duration-300"
       >
-        {/* High-level stats */}
+        {/* High-level stats with loading skeleton */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {stats.map((stat, idx) => (
-            <motion.div
-              key={stat.label}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="relative rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center justify-between overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:scale-[1.01] hover:shadow-[0_14px_26px_rgba(15,23,42,0.45)]"
-            >
-              {attackState === 'attacked' && stat.label === 'Threat Level' && (
-                <div className="absolute inset-0 bg-red-500/10 pointer-events-none" />
-              )}
-              <div className="relative z-10">
-                <p className="text-[11px] font-semibold text-slate-400 mb-0.5">
-                  {stat.label}
-                </p>
-                <p
-                  className={`text-lg font-heading font-bold ${
-                    stat.label === 'Threat Level' ? stat.color : 'text-white'
-                  } ${stat.label !== 'Threat Level' ? 'animate-pulse' : ''}`}
+          {isLoadingStats ? (
+            // Loading skeleton
+            Array.from({ length: 4 }).map((_, idx) => (
+              <motion.div
+                key={`skeleton-${idx}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 1.5, repeat: Infinity }}
+                className="relative rounded-2xl bg-white/5 border border-white/10 px-4 py-3 h-20"
+              >
+                <div className="h-3 bg-slate-700/50 rounded w-20 mb-2" />
+                <div className="h-6 bg-slate-700/50 rounded w-12" />
+              </motion.div>
+            ))
+          ) : (
+            stats.map((stat, idx) => (
+              <motion.div
+                key={stat.label}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                whileHover={{ y: -4, scale: 1.02, boxShadow: '0 14px 26px rgba(15,23,42,0.45)' }}
+                transition={{ delay: idx * 0.05 }}
+                className="relative rounded-2xl bg-white/5 border border-white/10 px-4 py-3 flex items-center justify-between overflow-hidden transition-all duration-300 cursor-pointer"
+              >
+                {attackState === 'attacked' && stat.label === 'Threat Level' && (
+                  <div className="absolute inset-0 bg-red-500/10 pointer-events-none" />
+                )}
+                <div className="relative z-10">
+                  <p className="text-[11px] font-semibold text-slate-400 mb-0.5">
+                    {stat.label}
+                  </p>
+                  <motion.p
+                    animate={stat.label !== 'Threat Level' ? { scale: [1, 1.05, 1] } : {}}
+                    transition={{ duration: 1.5, repeat: Infinity }}
+                    className={`text-lg font-heading font-bold ${
+                      stat.label === 'Threat Level' ? stat.color : 'text-white'
+                    }`}
+                  >
+                    {stat.value}
+                  </motion.p>
+                </div>
+                <motion.div
+                  whileHover={{ rotate: 15, scale: 1.1 }}
+                  className="relative z-10 p-2 rounded-xl bg-slate-900/70 border border-slate-700/80"
                 >
-                  {stat.value}
-                </p>
-              </div>
-              <div className="relative z-10 p-2 rounded-xl bg-slate-900/70 border border-slate-700/80">
-                <stat.icon className={`w-4 h-4 ${stat.color}`} />
-              </div>
-            </motion.div>
-          ))}
+                  <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                </motion.div>
+              </motion.div>
+            ))
+          )}
         </div>
 
         <div className="grid gap-5 lg:grid-cols-3">
           {/* Security Event Log */}
-          <div className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col hover:shadow-[0_0_20px_rgba(62,166,255,0.1)] transition-all"
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-brand-accent" />
@@ -597,14 +686,17 @@ export function Dashboard() {
             </div>
             <div ref={logsContainerRef} className="flex-1 max-h-64 overflow-y-auto space-y-3 pr-1 scroll-smooth">
               {logs.map((log, i) => (
-                <div
+                <motion.div
                   key={i}
-                  className={`flex gap-3 rounded-xl px-3 py-2.5 text-xs bg-brand-bg/70 border transition-colors ${
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                  className={`flex gap-3 rounded-xl px-3 py-2.5 text-xs bg-brand-bg/70 border transition-all hover:scale-[1.02] cursor-pointer ${
                     log.status === 'error'
-                      ? 'border-red-500/40 bg-red-500/10'
+                      ? 'border-red-500/40 bg-red-500/10 hover:shadow-[0_0_15px_rgba(239,68,68,0.2)]'
                       : log.status === 'warning'
-                      ? 'border-amber-500/30 bg-amber-500/5'
-                      : 'border-brand-border/40 hover:bg-brand-primary/5'
+                      ? 'border-amber-500/30 bg-amber-500/5 hover:shadow-[0_0_15px_rgba(250,204,21,0.2)]'
+                      : 'border-brand-border/40 hover:bg-brand-primary/5 hover:shadow-[0_0_15px_rgba(62,166,255,0.1)]'
                   }`}
                 >
                   <span className="text-[10px] font-mono text-slate-500 mt-0.5">
@@ -630,13 +722,16 @@ export function Dashboard() {
                       {log.status === 'error' ? 'critical' : log.status}
                     </span>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Threat distribution */}
-          <div className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col hover:shadow-[0_0_20px_rgba(62,166,255,0.1)] transition-all"
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-heading font-semibold text-white">
                 Threat Distribution
@@ -730,9 +825,10 @@ export function Dashboard() {
             </div>
             <div className="flex justify-center gap-4 mt-3">
               {pieData.map((entry, idx) => (
-                <div
+                <motion.div
                   key={idx}
-                  className="flex items-center gap-2 text-[11px] text-slate-300"
+                  whileHover={{ scale: 1.1 }}
+                  className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer"
                 >
                   <span
                     className="w-3 h-3 rounded-full shadow-sm"
@@ -742,13 +838,16 @@ export function Dashboard() {
                     }}
                   />
                   {entry.name}
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
           {/* Activity chart */}
-          <div className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col">
+          <motion.div
+            whileHover={{ scale: 1.01 }}
+            className="rounded-2xl bg-slate-950/60 border border-brand-border/70 p-4 flex flex-col hover:shadow-[0_0_20px_rgba(62,166,255,0.1)] transition-all"
+          >
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-heading font-semibold text-white">
                 AI Security Activity
@@ -780,6 +879,13 @@ export function Dashboard() {
                         stopOpacity={0}
                       />
                     </linearGradient>
+                    <filter id="glow">
+                      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+                      <feMerge>
+                        <feMergeNode in="coloredBlur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                      </feMerge>
+                    </filter>
                   </defs>
                   <CartesianGrid
                     strokeDasharray="3 3"
@@ -841,7 +947,7 @@ export function Dashboard() {
                 Live tracker: {trackerPoint?.time ?? '--:--'} • {trackerPoint?.events ?? '--'} events
               </span>
             </div>
-          </div>
+          </motion.div>
         </div>
       </motion.div>
 
