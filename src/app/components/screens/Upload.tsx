@@ -321,7 +321,8 @@ const handleDeleteShard = async () => {
         {/* 🔥 NEW BUTTON */}
         <button
           onClick={handleDeleteShard}
-          className="px-4 py-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-300 text-sm font-semibold transition-all hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(234,179,8,0.35)]"
+          disabled={!backendData?.fileId}
+          className="px-4 py-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-300 text-sm font-semibold transition-all hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(234,179,8,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Simulate Shard Loss
         </button>
@@ -338,7 +339,8 @@ const handleDeleteShard = async () => {
 
     window.open(`http://localhost:5000/api/download/${backendData.fileId}`);
   }}
-  className="px-4 py-2 rounded-lg border border-green-500/40 bg-green-500/10 text-green-300 text-sm font-semibold"
+  disabled={!backendData?.fileId}
+  className="px-4 py-2 rounded-lg border border-green-500/40 bg-green-500/10 text-green-300 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
 >
   Download File
 </button>
