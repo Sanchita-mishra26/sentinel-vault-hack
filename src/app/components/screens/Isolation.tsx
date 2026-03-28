@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NetworkMap } from '../NetworkMap';
 import { ShieldAlert, AlertTriangle, PowerOff, ArrowRight } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router';
 
 const isolatedNodes = [
@@ -13,7 +13,12 @@ const isolatedNodes = [
 ] as any;
 
 export function Isolation() {
-  const navigate = useNavigate();
+  let navigate;
+try {
+  navigate = useNavigate();
+} catch {
+  navigate = () => {};
+}
   const [pulse, setPulse] = useState(true);
 
   useEffect(() => {

@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { ShieldAlert, Server, Activity, PowerOff, Zap } from 'lucide-react';
 
 export type NodeState = 'active' | 'warning' | 'critical' | 'isolated' | 'isolated-danger' | 'reconstructing';
@@ -38,24 +38,30 @@ const lineColors = {
   reconstructing: 'stroke-brand-primary/80 stroke-dashed stroke-[3px]',
 };
 
+const MIN_COORDINATE = 0;
+const MAX_COORDINATE = 100;
+
+const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const clampCoordinate = (value: number) => Math.max(MIN_COORDINATE, Math.min(MAX_COORDINATE, value));
+const hasValidCoordinates = (node?: Node | null): node is Node => !!node && isFiniteNumber(node.x) && isFiniteNumber(node.y);
+
 export function NetworkMap({ nodes, coreState = 'active', title, message }: NetworkMapProps) {
   const safeNodes = useMemo(() => {
     if (!Array.isArray(nodes)) return [];
     const allowedStates: NodeState[] = ['active', 'warning', 'critical', 'isolated', 'isolated-danger', 'reconstructing'];
 
     return nodes
-      .filter(Boolean)
+      .filter(hasValidCoordinates)
       .map((node, index) => {
-        const normalizedState = allowedStates.includes((node as Node).state) ? (node as Node).state : 'active';
-        const safeX = typeof node?.x === 'number' ? node.x : 50;
-        const safeY = typeof node?.y === 'number' ? node.y : 50;
+        const normalizedState = allowedStates.includes(node.state) ? node.state : 'active';
+        const normalizedHealth = isFiniteNumber(node.health) ? node.health : 100;
         return {
-          id: node?.id ?? `node-${index + 1}`,
-          label: node?.label ?? `Node ${index + 1}`,
+          id: node.id ?? `node-${index + 1}`,
+          label: node.label ?? `Node ${index + 1}`,
           state: normalizedState,
-          health: typeof node?.health === 'number' ? node.health : 100,
-          x: safeX,
-          y: safeY,
+          health: normalizedHealth,
+          x: clampCoordinate(node.x),
+          y: clampCoordinate(node.y),
         };
       });
   }, [nodes]);
@@ -69,16 +75,19 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
     const fallbackX = 50 + fallbackRadius * Math.cos(angle);
     const fallbackY = 50 + fallbackRadius * Math.sin(angle);
 
+    const normalizedX = isFiniteNumber(node.x) ? clampCoordinate(node.x) : clampCoordinate(fallbackX);
+    const normalizedY = isFiniteNumber(node.y) ? clampCoordinate(node.y) : clampCoordinate(fallbackY);
+
     return {
-      x: typeof node.x === 'number' ? node.x : fallbackX,
-      y: typeof node.y === 'number' ? node.y : fallbackY,
+      x: normalizedX,
+      y: normalizedY,
     };
   };
-  
+
   const renderIcon = (state: NodeState) => {
-    switch(state) {
+    switch (state) {
       case 'critical': return <Activity className="w-5 h-5 animate-bounce" />;
-      case 'isolated': 
+      case 'isolated':
       case 'isolated-danger': return <PowerOff className="w-5 h-5" />;
       case 'reconstructing': return <Zap className="w-5 h-5" />;
       default: return <Server className="w-5 h-5" />;
@@ -87,7 +96,7 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
 
   return (
     <div className="relative w-full h-full min-h-[600px] flex flex-col items-center justify-center bg-brand-bg/50 rounded-2xl border border-brand-border/40 overflow-hidden glass-card p-20">
-      
+
       {/* Background Grid */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none" />
       {!safeNodes.length && (
@@ -97,11 +106,11 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
           </div>
         </div>
       )}
-      
+
       {title && (
-         <div className="absolute top-6 left-8 z-20">
-           <h3 className="font-heading font-semibold text-white/80">{title}</h3>
-         </div>
+        <div className="absolute top-6 left-8 z-20">
+          <h3 className="font-heading font-semibold text-white/80">{title}</h3>
+        </div>
       )}
 
       {/* Circular Layout Wrapper */}
@@ -111,10 +120,10 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
           <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible" style={{ zIndex: 0 }}>
             <defs>
               <filter id="glow">
-                <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                <feGaussianBlur stdDeviation="2" result="coloredBlur" />
                 <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
+                  <feMergeNode in="coloredBlur" />
+                  <feMergeNode in="SourceGraphic" />
                 </feMerge>
               </filter>
             </defs>
@@ -130,12 +139,12 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
               const startY = 50 + (dy / distance) * innerRadius;
 
               return (
-                <line 
+                <line
                   key={`line-${node.id}`}
-                  x1={`${startX}%`} 
-                  y1={`${startY}%`} 
-                  x2={`${x}%`} 
-                  y2={`${y}%`} 
+                  x1={`${startX}%`}
+                  y1={`${startY}%`}
+                  x2={`${x}%`}
+                  y2={`${y}%`}
                   className={`${getLineColor(node.state)} transition-all duration-1000`}
                   strokeWidth="2"
                   strokeLinecap="round"
@@ -145,17 +154,31 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
             })}
             {/* Data flow animations */}
             {safeNodes.map((node, i) => {
-              if (node.state === 'isolated' || node.state === 'isolated-danger' || node.state === 'critical') return null;
-              const { x, y } = getNodePosition(node, i, safeNodes.length || 1);
+              if (
+                node.state === 'isolated' ||
+                node.state === 'isolated-danger' ||
+                node.state === 'critical'
+              ) return null;
+
+              const pos = getNodePosition(node, i, safeNodes.length || 1);
+
+              if (pos.x == null || pos.y == null || isNaN(pos.x) || isNaN(pos.y)) {
+                return null;
+              }
+
+              const x = pos.x;
+              const y = pos.y;
               return (
                 <motion.circle
                   key={`particle-${node.id}`}
                   r="3"
+                  cx="50%"
+                  cy="50%"
                   fill={node.state === 'reconstructing' ? '#3EA6FF' : '#6BD3FF'}
                   className="drop-shadow-[0_0_5px_rgba(107,211,255,0.8)]"
                   animate={{
-                    cx: ["50%", `${x}%`],
-                    cy: ["50%", `${y}%`],
+                    translateX: `${(x - 50) || 0}%`,
+                    translateY: `${(y - 50) || 0}%`,
                   }}
                   transition={{
                     duration: node.state === 'reconstructing' ? 1.5 : 2.5 + Math.random(),
@@ -169,28 +192,27 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
 
           {/* Nodes Layer */}
           <div className="absolute inset-0 w-full h-full pointer-events-none">
-            
+
             {/* Central Core */}
-            <div 
-              className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-24 h-24 rounded-full border-2 flex items-center justify-center shadow-[0_0_30px_rgba(62,166,255,0.2)] bg-brand-card ${
-                coreState === 'critical' ? 'border-red-500 shadow-[0_0_40px_rgba(239,68,68,0.4)] animate-pulse' : 'border-brand-primary'
-              }`}
+            <div
+              className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-24 h-24 rounded-full border-2 flex items-center justify-center shadow-[0_0_30px_rgba(62,166,255,0.2)] bg-brand-card ${coreState === 'critical' ? 'border-red-500 shadow-[0_0_40px_rgba(239,68,68,0.4)] animate-pulse' : 'border-brand-primary'
+                }`}
             >
-               <ShieldAlert className={`w-10 h-10 ${coreState === 'critical' ? 'text-red-500' : 'text-brand-primary'}`} />
-               <span className="absolute -bottom-8 font-heading text-xs font-semibold whitespace-nowrap text-slate-300">
-                 Sentinel Core
-               </span>
+              <ShieldAlert className={`w-10 h-10 ${coreState === 'critical' ? 'text-red-500' : 'text-brand-primary'}`} />
+              <span className="absolute -bottom-8 font-heading text-xs font-semibold whitespace-nowrap text-slate-300">
+                Sentinel Core
+              </span>
             </div>
 
             {/* Distributed Nodes */}
             {safeNodes.map((node, i) => {
               const { x, y } = getNodePosition(node, i, safeNodes.length || 1);
               return (
-                <div 
+                <div
                   key={node.id}
                   className="absolute flex flex-col items-center justify-center gap-2 pointer-events-auto transition-all duration-500 hover:scale-110 cursor-pointer"
-                  style={{ 
-                    left: `${x}%`, 
+                  style={{
+                    left: `${x}%`,
                     top: `${y}%`,
                     transform: 'translate(-50%, -50%)'
                   }}
@@ -198,10 +220,9 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
                   <div className={`w-12 h-12 rounded-xl border flex items-center justify-center ${getNodeColor(node.state)} transition-colors duration-500`}>
                     {renderIcon(node.state)}
                   </div>
-                  
-                  <div className={`px-2 py-1 rounded-md text-[10px] font-medium border whitespace-nowrap bg-brand-card/80 backdrop-blur-sm ${
-                    (node.state === 'critical' || node.state === 'isolated-danger') ? 'border-red-500 text-red-400' : 'border-brand-border/50 text-slate-400'
-                  }`}>
+
+                  <div className={`px-2 py-1 rounded-md text-[10px] font-medium border whitespace-nowrap bg-brand-card/80 backdrop-blur-sm ${(node.state === 'critical' || node.state === 'isolated-danger') ? 'border-red-500 text-red-400' : 'border-brand-border/50 text-slate-400'
+                    }`}>
                     <div className="font-bold text-white mb-0.5">{node.label}</div>
                     <div>Health: {node.health}%</div>
                     {node.state === 'reconstructing' && <div className="text-brand-primary animate-pulse mt-0.5">Rebuilding...</div>}
@@ -216,7 +237,7 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
 
       {message && (
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
-           {message}
+          {message}
         </div>
       )}
     </div>
