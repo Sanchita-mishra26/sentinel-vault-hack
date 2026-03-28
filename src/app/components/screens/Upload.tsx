@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { UploadCloud, FileText, CheckCircle, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { useFile } from '../../context/FileContext';
 
 export function Upload() {
+  const { fileState, setFile, setFileId, setMetadata, setBackendData, resetFileState } = useFile();
+
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [backendData, setBackendData] = useState<any>(null);
   const [uploadTimestamp, setUploadTimestamp] = useState<string>('');
   const [sessionId, setSessionId] = useState<string>('');
   const [scanStatus, setScanStatus] = useState<'analyzing' | 'ready'>('analyzing');
@@ -16,6 +17,10 @@ export function Upload() {
   const uploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  // Use fileState for rendering
+  const selectedFile = fileState.file;
+  const backendData = fileState.backendData;
 
   useEffect(() => {
     return () => {
@@ -138,9 +143,23 @@ export function Upload() {
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] ?? null;
     if (!file) return;
-    setSelectedFile(file);
-    setUploadTimestamp(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    setSessionId(`SV-${Math.floor(1000 + Math.random() * 9000)}`);
+
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const newSessionId = `SV-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Update context with file and metadata
+    setFile(file);
+    setMetadata({
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      uploadTimestamp: timestamp,
+      sessionId: newSessionId,
+    });
+
+    // Update local UI state
+    setUploadTimestamp(timestamp);
+    setSessionId(newSessionId);
     setScanStatus('analyzing');
     setIsUploading(false);
     setProgress(0);
@@ -160,7 +179,10 @@ export function Upload() {
   };
 
   const handleRemoveFile = () => {
-    setSelectedFile(null);
+    // Reset context
+    resetFileState();
+
+    // Reset local UI state
     setUploadTimestamp('');
     setSessionId('');
     setScanStatus('analyzing');
