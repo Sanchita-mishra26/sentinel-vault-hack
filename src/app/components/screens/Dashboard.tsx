@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, HardDrive, AlertOctagon, CheckCircle2, Clock, Activity, Zap, Target, Server, Network, AlertTriangle } from 'lucide-react';
-import { NetworkMap } from '../NetworkMap';
+import { NetworkMap, NodeState } from '../NetworkMap';
 import { AIAssistant } from '../AIAssistant';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceDot } from 'recharts';
@@ -40,6 +40,10 @@ const streamLogMessages = [
   'AI signature model refreshed',
 ];
 
+const allowedNodeStates: NodeState[] = ['active', 'warning', 'critical', 'isolated', 'isolated-danger', 'reconstructing'];
+const normalizeNodeState = (state?: string): NodeState =>
+  allowedNodeStates.includes(state as NodeState) ? (state as NodeState) : 'active';
+
 export function Dashboard() {
   const [attackState, setAttackState] = useState<'idle' | 'attacked' | 'isolated' | 'recovering' | 'recovered'>('idle');
   const [logs, setLogs] = useState(initialLogs);
@@ -59,6 +63,7 @@ export function Dashboard() {
   const [activityData, setActivityData] = useState(baseActivityData);
   const [activeThreatIndex, setActiveThreatIndex] = useState<number>(-1);
   const [activityTrackerIndex, setActivityTrackerIndex] = useState(0);
+  const countedStatsRef = useRef(countedStats);
 
   // NEW: Real data from backend
   const [realStats, setRealStats] = useState<{ filesSecured: number; totalShards: number; activeNodes: number } | null>(null);
@@ -68,15 +73,30 @@ export function Dashboard() {
   const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const logsContainerRef = useRef<HTMLDivElement | null>(null);
   const attackTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const baseNodes = Array.isArray(initialNodes) ? initialNodes : [];
+
+  useEffect(() => {
+    countedStatsRef.current = countedStats;
+  }, [countedStats]);
 
   // Fetch real stats from backend
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await fetch('http://localhost:5000/api/stats');
+        if (!res.ok) {
+          throw new Error(`Stats request failed with status ${res.status}`);
+        }
         const data = await res.json();
         console.log('Dashboard stats:', data);
-        setRealStats(data);
+        setRealStats(prev => {
+          const fallback = prev ?? { filesSecured: 0, totalShards: 0, activeNodes: baseNodes.length || 0 };
+          return {
+            filesSecured: typeof data?.filesSecured === 'number' ? data.filesSecured : fallback.filesSecured,
+            totalShards: typeof data?.totalShards === 'number' ? data.totalShards : fallback.totalShards,
+            activeNodes: typeof data?.activeNodes === 'number' ? data.activeNodes : fallback.activeNodes,
+          };
+        });
         setIsLoadingStats(false);
       } catch (err) {
         console.error('Failed to fetch stats:', err);
@@ -168,7 +188,7 @@ export function Dashboard() {
     const t = setInterval(() => {
       setNodeHealth(prev => {
         const next: Record<string, number> = { ...prev };
-        for (const node of initialNodes) {
+        for (const node of baseNodes) {
           const delta = Math.random() > 0.5 ? 1 : -1;
           const baseline = prev[node.id] ?? node.health;
           next[node.id] = Math.max(92, Math.min(100, baseline + delta));
@@ -199,28 +219,31 @@ export function Dashboard() {
     return () => clearInterval(t);
   }, []);
 
+  const activityLength = Array.isArray(activityData) && activityData.length ? activityData.length : baseActivityData.length || 1;
+
   useEffect(() => {
     const t = setInterval(() => {
-      setActivityData(prev =>
-        prev.map((point, idx) => {
-          const spike = attackState === 'attacked' && idx >= prev.length - 2 ? 20 : 0;
+      setActivityData(prev => {
+        const safePrev = Array.isArray(prev) && prev.length ? prev : baseActivityData;
+        return safePrev.map((point, idx) => {
+          const spike = attackState === 'attacked' && idx >= safePrev.length - 2 ? 20 : 0;
           const delta = Math.floor(Math.random() * 5) - 2;
           return {
             ...point,
             events: Math.max(6, Math.min(95, point.events + delta + spike)),
           };
-        }),
-      );
+        });
+      });
     }, 3200);
     return () => clearInterval(t);
   }, [attackState]);
 
   useEffect(() => {
     const t = setInterval(() => {
-      setActivityTrackerIndex(prev => (prev + 1) % activityData.length);
+      setActivityTrackerIndex(prev => (activityLength ? (prev + 1) % activityLength : 0));
     }, 1800);
     return () => clearInterval(t);
-  }, [activityData.length]);
+  }, [activityLength]);
 
   useEffect(() => {
     attackTimersRef.current.forEach(clearTimeout);
@@ -234,11 +257,22 @@ export function Dashboard() {
   const addLog = (msg: string, status: string) => {
     const now = new Date();
     const time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
-    setLogs(prev => [{ time, msg, status }, ...prev.slice(0, 9)]);
+    setLogs(prev => {
+      const safePrev = Array.isArray(prev) ? prev : initialLogs;
+      return [{ time, msg, status }, ...safePrev.slice(0, 9)];
+    });
   };
 
   const handleSimulate = () => {
-    const target = initialNodes[Math.floor(Math.random() * initialNodes.length)];
+    if (!baseNodes.length) {
+      addLog('No nodes available for simulation.', 'warning');
+      return;
+    }
+    const target = baseNodes[Math.floor(Math.random() * baseNodes.length)];
+    if (!target) {
+      addLog('Unable to select target node.', 'warning');
+      return;
+    }
     setAttackTargetNodeId(target.id);
     setLineFlicker(true);
     setSelectedNodeId(target.id);
@@ -267,7 +301,17 @@ export function Dashboard() {
     return 'bg-brand-primary/10 text-brand-primary border border-brand-primary/20';
   };
 
-  const currentNodes = initialNodes.map(n => {
+  const normalizedNodes = baseNodes.map((n, idx) => ({
+    ...n,
+    id: n.id ?? String(idx + 1),
+    label: n.label ?? `Node ${idx + 1}`,
+    state: normalizeNodeState((n as any).state),
+    health: typeof n.health === 'number' ? n.health : 100,
+    x: typeof n.x === 'number' ? n.x : 50,
+    y: typeof n.y === 'number' ? n.y : 50,
+  }));
+
+  const currentNodes = normalizedNodes.map(n => {
     let node = { ...n, health: nodeHealth[n.id] ?? n.health };
 
     // Attack simulation effects on a targeted node
@@ -281,20 +325,22 @@ export function Dashboard() {
     return node;
   });
 
-  const activeNodes = attackState === 'isolated' || attackState === 'recovering' ? '4' : '5';
+  const totalNodeCount = normalizedNodes.length || 0;
+  const activeNodesCount = attackState === 'isolated' || attackState === 'recovering' ? Math.max(totalNodeCount - 1, 0) : totalNodeCount;
+  const activeNodes = activeNodesCount.toString();
   const alertsColor = attackState === 'attacked' ? 'text-red-500' : 'text-yellow-400';
   const integrity = attackState === 'attacked' ? '65%' : (attackState === 'recovering' ? '85%' : '100%');
   const integrityColor = attackState === 'attacked' ? 'text-red-500' : (attackState === 'recovering' ? 'text-yellow-400' : 'text-green-400');
 
   useEffect(() => {
+    const start = countedStatsRef.current;
     const target = {
-      filesSecured: realStats?.filesSecured ?? 0,
-      activeNodes: Number(activeNodes),
-      integrity: Number(integrity.replace('%', '')),
+      filesSecured: realStats?.filesSecured ?? start.filesSecured,
+      activeNodes: Number(activeNodes) || start.activeNodes,
+      integrity: Number(integrity.replace('%', '')) || start.integrity,
     };
     let step = 0;
     const steps = 20;
-    const start = { ...countedStats };
 
     const t = setInterval(() => {
       step += 1;
@@ -326,7 +372,9 @@ export function Dashboard() {
   const totalThreatNodes = pieData.reduce((acc, item) => acc + item.value, 0) || 1;
   const safePercent = Math.round(((pieData.find(item => item.name === 'Safe')?.value ?? 0) / totalThreatNodes) * 100);
   const atRiskPercent = 100 - safePercent;
-  const trackerPoint = activityData[Math.min(activityTrackerIndex, Math.max(activityData.length - 1, 0))];
+  const safeActivityData = Array.isArray(activityData) && activityData.length ? activityData : baseActivityData;
+  const trackerPoint = safeActivityData[Math.min(activityTrackerIndex, Math.max(safeActivityData.length - 1, 0))];
+  const safeLogs = Array.isArray(logs) ? logs : initialLogs;
 
   return (
     <div className="flex flex-col gap-6 relative min-h-full pb-6">
@@ -685,7 +733,12 @@ export function Dashboard() {
               <span className="text-[10px] text-slate-400">Last 10 events {typingCursorVisible ? '|' : ' '}</span>
             </div>
             <div ref={logsContainerRef} className="flex-1 max-h-64 overflow-y-auto space-y-3 pr-1 scroll-smooth">
-              {logs.map((log, i) => (
+              {safeLogs.length === 0 && (
+                <div className="text-xs text-slate-500 px-3 py-2 border border-dashed border-brand-border/50 rounded-xl bg-brand-bg/60">
+                  No log entries available.
+                </div>
+              )}
+              {safeLogs.map((log, i) => (
                 <motion.div
                   key={i}
                   initial={{ opacity: 0, x: -10 }}
@@ -859,7 +912,7 @@ export function Dashboard() {
             <div className="flex-1 min-h-[200px]">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
-                  data={activityData}
+                  data={safeActivityData}
                   margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                 >
                   <defs>

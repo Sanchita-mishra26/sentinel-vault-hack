@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { ShieldAlert, Server, Activity, PowerOff, Zap } from 'lucide-react';
 
 export type NodeState = 'active' | 'warning' | 'critical' | 'isolated' | 'isolated-danger' | 'reconstructing';
 
-interface Node {
+export interface Node {
   id: string;
   label: string;
   state: NodeState;
@@ -14,7 +14,7 @@ interface Node {
 }
 
 interface NetworkMapProps {
-  nodes: Node[];
+  nodes?: Node[] | null;
   coreState?: 'active' | 'warning' | 'critical';
   title?: string;
   message?: React.ReactNode;
@@ -39,9 +39,29 @@ const lineColors = {
 };
 
 export function NetworkMap({ nodes, coreState = 'active', title, message }: NetworkMapProps) {
-  
-  const getLineColor = (state: NodeState) => lineColors[state];
-  const getNodeColor = (state: NodeState) => stateColors[state];
+  const safeNodes = useMemo(() => {
+    if (!Array.isArray(nodes)) return [];
+    const allowedStates: NodeState[] = ['active', 'warning', 'critical', 'isolated', 'isolated-danger', 'reconstructing'];
+
+    return nodes
+      .filter(Boolean)
+      .map((node, index) => {
+        const normalizedState = allowedStates.includes((node as Node).state) ? (node as Node).state : 'active';
+        const safeX = typeof node?.x === 'number' ? node.x : 50;
+        const safeY = typeof node?.y === 'number' ? node.y : 50;
+        return {
+          id: node?.id ?? `node-${index + 1}`,
+          label: node?.label ?? `Node ${index + 1}`,
+          state: normalizedState,
+          health: typeof node?.health === 'number' ? node.health : 100,
+          x: safeX,
+          y: safeY,
+        };
+      });
+  }, [nodes]);
+
+  const getLineColor = (state: NodeState) => lineColors[state] ?? lineColors.active;
+  const getNodeColor = (state: NodeState) => stateColors[state] ?? stateColors.active;
 
   const getNodePosition = (node: Node, index: number, total: number) => {
     const angle = (index * (Math.PI * 2)) / total - Math.PI / 2;
@@ -70,6 +90,13 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
       
       {/* Background Grid */}
       <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 pointer-events-none" />
+      {!safeNodes.length && (
+        <div className="absolute inset-0 flex items-center justify-center z-30">
+          <div className="px-4 py-2 rounded-xl bg-slate-900/85 border border-brand-border/60 text-slate-300 text-sm shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            Topology data unavailable
+          </div>
+        </div>
+      )}
       
       {title && (
          <div className="absolute top-6 left-8 z-20">
@@ -91,8 +118,8 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
                 </feMerge>
               </filter>
             </defs>
-            {nodes.map((node, i) => {
-              const { x, y } = getNodePosition(node, i, nodes.length);
+            {safeNodes.map((node, i) => {
+              const { x, y } = getNodePosition(node, i, safeNodes.length || 1);
               const dx = x - 50;
               const dy = y - 50;
               const distance = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -117,9 +144,9 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
               );
             })}
             {/* Data flow animations */}
-            {nodes.map((node, i) => {
+            {safeNodes.map((node, i) => {
               if (node.state === 'isolated' || node.state === 'isolated-danger' || node.state === 'critical') return null;
-              const { x, y } = getNodePosition(node, i, nodes.length);
+              const { x, y } = getNodePosition(node, i, safeNodes.length || 1);
               return (
                 <motion.circle
                   key={`particle-${node.id}`}
@@ -156,8 +183,8 @@ export function NetworkMap({ nodes, coreState = 'active', title, message }: Netw
             </div>
 
             {/* Distributed Nodes */}
-            {nodes.map((node, i) => {
-              const { x, y } = getNodePosition(node, i, nodes.length);
+            {safeNodes.map((node, i) => {
+              const { x, y } = getNodePosition(node, i, safeNodes.length || 1);
               return (
                 <div 
                   key={node.id}
