@@ -4,10 +4,16 @@ const fileRoutes = require("./routes/fileRoutes");
 
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 
-// ✅ THIS LINE IS CRITICAL
+// Main Routes
 app.use("/api", fileRoutes);
 
 app.listen(5000, () => {

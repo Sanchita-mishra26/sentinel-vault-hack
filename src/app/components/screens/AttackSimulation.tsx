@@ -1,21 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NetworkMap } from '../NetworkMap';
 import { Gauge } from '../Gauge';
-import { motion, AnimatePresence } from 'motion/react';
-import { ShieldAlert, Activity, AlertTriangle, ArrowRight } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Activity, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const attackNodes = [
-  { id: '1', label: 'Node 1', state: 'warning', health: 85, x: 20, y: 30 },
-  { id: '2', label: 'Node 2', state: 'active', health: 98, x: 80, y: 30 },
-  { id: '3', label: 'Node 3', state: 'critical', health: 42, x: 85, y: 75 },
-  { id: '4', label: 'Node 4', state: 'active', health: 95, x: 50, y: 90 },
-  { id: '5', label: 'Node 5', state: 'active', health: 99, x: 15, y: 75 },
-] as any;
+import { useFile } from '../../context/FileContext';
 
 export function AttackSimulation() {
   const [threatScore, setThreatScore] = useState(12);
   const navigate = useNavigate();
+  const { fileData } = useFile();
+
+  const attackNodes = useMemo(() => {
+    const shards = fileData?.shards ?? [];
+    const positions = [
+      { x: 20, y: 30 },
+      { x: 80, y: 30 },
+      { x: 85, y: 75 },
+      { x: 50, y: 90 },
+      { x: 15, y: 75 },
+    ];
+    return shards.map((s, i) => ({
+      id: s.id,
+      label: `Shard ${i + 1}`,
+      state: i === 2 ? 'critical' : 'active',
+      health: 85 + ((i * 7) % 14),
+      ...positions[i % positions.length],
+    }));
+  }, [fileData?.shards]);
 
   useEffect(() => {
     let currentScore = 12;

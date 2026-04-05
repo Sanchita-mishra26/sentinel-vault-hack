@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { NetworkMap } from '../NetworkMap';
-import { ShieldAlert, AlertTriangle, PowerOff, ArrowRight } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ShieldAlert, PowerOff, ArrowRight } from 'lucide-react';
+import { motion } from 'framer-motion';       
 import { useNavigate } from 'react-router';
+import { useFile } from '../../context/FileContext';
 
 const isolatedNodes = [
   { id: '1', label: 'Node 1', state: 'active', health: 100, x: 20, y: 30 },
@@ -13,6 +14,7 @@ const isolatedNodes = [
 ] as any;
 
 export function Isolation() {
+  const { setFileData } = useFile();
   let navigate;
 try {
   navigate = useNavigate();
@@ -20,6 +22,17 @@ try {
   navigate = () => {};
 }
   const [pulse, setPulse] = useState(true);
+
+  useEffect(() => {
+    setFileData((prev) => ({
+      ...prev,
+      systemStatus: {
+        ...prev?.systemStatus,
+        phase: 'isolation',
+        message: 'Compromised node isolated from mesh',
+      },
+    }));
+  }, [setFileData]);
 
   useEffect(() => {
     const i = setInterval(() => setPulse(p => !p), 1000);

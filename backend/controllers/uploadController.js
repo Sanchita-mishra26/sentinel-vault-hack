@@ -72,15 +72,17 @@ storage.files[fileId] = {
 console.log("💾 File stored in memory:", fileId);
 
     res.json({
-  message: "File processed successfully",
-  fileId, 
-  fileName: file.originalname,
-  totalShards: allShards.length,
-  nodes: Object.keys(nodes).map(node => ({
-    node,
-    shardCount: nodes[node].length
-  }))
-});
+      message: "File processed successfully",
+      fileId,
+      fileName: file.originalname,
+      fileSize: file.size,
+      uploadStatus: "completed",
+      totalShards: allShards.length,
+      nodes: Object.keys(nodes).map((node) => ({
+        node,
+        shardCount: nodes[node].length,
+      })),
+    });
 
   } catch (error) {
     console.error(error);

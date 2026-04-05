@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { UploadCloud, FileText, CheckCircle, ArrowRight, ShieldCheck, Activity } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useFile } from '../../context/FileContext';
+import { API_BASE } from '../../apiBase';
 
 export function Upload() {
-  const { fileState, setFile, setFileId, setMetadata, setBackendData, resetFileState } = useFile();
+  const { fileState, fileData, setFile, setFileId, setMetadata, setFileData, resetFileState } = useFile();
 
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -20,7 +21,6 @@ export function Upload() {
 
   // Use fileState for rendering
   const selectedFile = fileState.file;
-  const backendData = fileState.backendData;
 
   useEffect(() => {
     return () => {
@@ -66,8 +66,8 @@ export function Upload() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      console.log("Sending upload request to backend at http://localhost:5000/api/upload");
-      const res = await fetch("http://localhost:5000/api/upload", {
+      console.log("Sending upload request to backend at", `${API_BASE}/api/upload`);
+      const res = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         body: formData
       });
@@ -77,7 +77,14 @@ export function Upload() {
 
       console.log("Backend response:", data);
 
-      setBackendData(data);
+      setFileData((prev) => ({
+        ...prev,
+        fileId: data.fileId ?? prev?.fileId,
+        fileName: data.fileName ?? selectedFile.name,
+        fileSize: data.fileSize ?? selectedFile.size,
+        uploadStatus: data.uploadStatus ?? 'completed',
+      }));
+      if (data.fileId) setFileId(data.fileId);
 
     } catch (err) {
       console.error("Upload error:", err);
@@ -90,21 +97,22 @@ export function Upload() {
 
   
   const handleDeleteShard = async () => {
-    if (!backendData?.fileId) {
+    const fid = fileData?.fileId;
+    if (!fid) {
       console.log("No fileId found for shard deletion");
       alert("File ID is missing. Please upload a file first.");
       return;
     }
 
     try {
-      console.log("Sending delete shard request for file:", backendData.fileId);
-      const res = await fetch("http://localhost:5000/api/delete-shard", {
+      console.log("Sending delete shard request for file:", fid);
+      const res = await fetch(`${API_BASE}/api/delete-shard`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          fileId: backendData.fileId,
+          fileId: fid,
           shardId: "shard-1"
         })
       });
@@ -125,12 +133,13 @@ export function Upload() {
   };
 
   const handleDownload = () => {
-    if (!backendData?.fileId) {
+    const fid = fileData?.fileId;
+    if (!fid) {
       alert("File ID is missing. Please upload a file first.");
       return;
     }
 
-    const downloadUrl = `http://localhost:5000/api/download/${backendData.fileId}`;
+    const downloadUrl = `${API_BASE}/api/download/${fid}`;
     console.log("Opening download URL:", downloadUrl);
     window.open(downloadUrl);
   };
@@ -328,9 +337,9 @@ export function Upload() {
         <p className="text-green-300">✔ Ready for Encryption</p>
 
         {/* 🔥 Backend File ID */}
-        {backendData && (
+        {fileData?.fileId && (
           <p className="text-blue-300">
-            🆔 File ID: {backendData.fileId}
+            🆔 File ID: {fileData.fileId}
           </p>
         )}
       </div>
@@ -365,7 +374,7 @@ export function Upload() {
         {/* 🔥 NEW BUTTON */}
         <button
           onClick={handleDeleteShard}
-          disabled={!backendData?.fileId}
+          disabled={!fileData?.fileId}
           className="px-4 py-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-300 text-sm font-semibold transition-all hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(234,179,8,0.35)] disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Simulate Shard Loss
@@ -376,7 +385,7 @@ export function Upload() {
 
   <button
   onClick={handleDownload}
-  disabled={!backendData?.fileId}
+  disabled={!fileData?.fileId}
   className="px-4 py-2 rounded-lg border border-green-500/40 bg-green-500/10 text-green-300 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
 >
   Download File

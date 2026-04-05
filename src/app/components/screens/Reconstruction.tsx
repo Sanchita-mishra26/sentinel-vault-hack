@@ -3,6 +3,7 @@ import { NetworkMap } from '../NetworkMap';
 import { motion } from 'motion/react';
 import { Zap, Activity, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useFile } from '../../context/FileContext';
 
 const reconstructionNodes = [
   { id: '1', label: 'Node 1', state: 'active', health: 100, x: 20, y: 30 },
@@ -15,6 +16,18 @@ const reconstructionNodes = [
 export function Reconstruction() {
   const [progress, setProgress] = useState(0);
   const navigate = useNavigate();
+  const { setFileData } = useFile();
+
+  useEffect(() => {
+    setFileData((prev) => ({
+      ...prev,
+      systemStatus: {
+        ...prev?.systemStatus,
+        phase: 'reconstruction',
+        message: 'Erasure coding reconstruction in progress',
+      },
+    }));
+  }, [setFileData]);
 
   useEffect(() => {
     const interval = setInterval(() => {

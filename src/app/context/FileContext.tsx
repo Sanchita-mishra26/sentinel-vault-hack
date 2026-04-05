@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useState, ReactNode } from 'react';
+
 
 export interface FileMetadata {
   name: string;
@@ -8,14 +9,14 @@ export interface FileMetadata {
   sessionId: string;
 }
 
+/** Compliance payload from GET /api/compliance/:fileId (merged into global fileData). */
 export interface ComplianceReport {
-  status: 'pending' | 'scanning' | 'completed';
+  status?: string;
+  findings?: string | string[];
   piiCategories?: number;
-  entities?: {
-    fullNames: number;
-    datesOfBirth: number;
-    identificationNums: number;
-  };
+  entities?: Array<{ label: string; count: number }>;
+  message?: string;
+  /** Legacy UI fields (optional) */
   detectedContent?: string;
 }
 
@@ -23,6 +24,13 @@ export interface EncryptionStatus {
   isEncrypted: boolean;
   algorithm?: string;
   timestamp?: string;
+}
+
+export interface ShardEntry {
+  id: string;
+  size: number;
+  node: string;
+  status: string;
 }
 
 export interface ShardData {
@@ -36,23 +44,36 @@ export interface ShardData {
   distributionNodes: number;
 }
 
+export interface SystemStatus {
+  phase?: string;
+  message?: string;
+}
+
+/** Global file flow state (merged incrementally — never replace wholesale). */
+export interface FileData {
+  fileId?: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  uploadStatus?: string | null;
+  complianceReport?: ComplianceReport | null;
+  shards?: ShardEntry[] | null;
+  encryptionStatus?: EncryptionStatus | null;
+  systemStatus?: SystemStatus | null;
+}
+
 export interface FileState {
-  // Core file data
   file: File | null;
   fileId: string | null;
   metadata: FileMetadata | null;
-
-  // Processing states
   complianceReport: ComplianceReport | null;
   encryptionStatus: EncryptionStatus | null;
   shardData: ShardData | null;
-
-  // Backend response
   backendData: any | null;
 }
 
 interface FileContextType {
   fileState: FileState;
+  fileData: FileData | null;
   setFile: (file: File | null) => void;
   setFileId: (fileId: string | null) => void;
   setMetadata: (metadata: FileMetadata | null) => void;
@@ -60,6 +81,7 @@ interface FileContextType {
   setEncryptionStatus: (status: EncryptionStatus | null) => void;
   setShardData: (data: ShardData | null) => void;
   setBackendData: (data: any) => void;
+  setFileData: (update: Partial<FileData> | ((prev: FileData | null) => Partial<FileData> | null)) => void;
   resetFileState: () => void;
 }
 
@@ -77,43 +99,57 @@ const FileContext = createContext<FileContextType | undefined>(undefined);
 
 export function FileProvider({ children }: { children: ReactNode }) {
   const [fileState, setFileStateInternal] = useState<FileState>(initialFileState);
+  const [fileData, setFileDataInternal] = useState<FileData | null>(null);
 
   const setFile = (file: File | null) => {
-    setFileStateInternal(prev => ({ ...prev, file }));
+    setFileStateInternal((prev) => ({ ...prev, file }));
   };
 
   const setFileId = (fileId: string | null) => {
-    setFileStateInternal(prev => ({ ...prev, fileId }));
+    setFileStateInternal((prev) => ({ ...prev, fileId }));
   };
 
   const setMetadata = (metadata: FileMetadata | null) => {
-    setFileStateInternal(prev => ({ ...prev, metadata }));
+    setFileStateInternal((prev) => ({ ...prev, metadata }));
   };
 
   const setComplianceReport = (report: ComplianceReport | null) => {
-    setFileStateInternal(prev => ({ ...prev, complianceReport: report }));
+    setFileStateInternal((prev) => ({ ...prev, complianceReport: report }));
   };
 
   const setEncryptionStatus = (status: EncryptionStatus | null) => {
-    setFileStateInternal(prev => ({ ...prev, encryptionStatus: status }));
+    setFileStateInternal((prev) => ({ ...prev, encryptionStatus: status }));
   };
 
   const setShardData = (data: ShardData | null) => {
-    setFileStateInternal(prev => ({ ...prev, shardData: data }));
+    setFileStateInternal((prev) => ({ ...prev, shardData: data }));
   };
 
   const setBackendData = (data: any) => {
-    setFileStateInternal(prev => ({ ...prev, backendData: data }));
+    setFileStateInternal((prev) => ({ ...prev, backendData: data }));
   };
+
+  const setFileData = useCallback(
+    (update: Partial<FileData> | ((prev: FileData | null) => Partial<FileData> | null)) => {
+      setFileDataInternal((prev) => {
+        const patch = typeof update === 'function' ? update(prev) : update;
+        if (patch == null) return prev;
+        return { ...(prev ?? {}), ...patch };
+      });
+    },
+    []
+  );
 
   const resetFileState = () => {
     setFileStateInternal(initialFileState);
+    setFileDataInternal(null);
   };
 
   return (
     <FileContext.Provider
       value={{
         fileState,
+        fileData,
         setFile,
         setFileId,
         setMetadata,
@@ -121,6 +157,7 @@ export function FileProvider({ children }: { children: ReactNode }) {
         setEncryptionStatus,
         setShardData,
         setBackendData,
+        setFileData,
         resetFileState,
       }}
     >

@@ -1,12 +1,56 @@
-import React, { useEffect, useState } from 'react';
-import { FileText, Lock, ArrowRight, Server, Activity, ArrowRightLeft, ShieldAlert } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { FileText, Lock, ArrowRight, Server, Activity, ShieldAlert } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Gauge } from '../Gauge';
 import { useNavigate } from 'react-router-dom';
+import { useFile, type ShardEntry, type EncryptionStatus } from '../../context/FileContext';
+import { API_BASE, parseJsonResponse } from '../../apiBase';
 
 export function EncryptionFlow() {
   const [step, setStep] = useState(0);
   const navigate = useNavigate();
+  const { fileData, setFileData } = useFile();
+
+  const gridShards = useMemo(() => {
+    const s = fileData?.shards ?? [];
+    const row = s.slice(0, 4);
+    const out = [...row];
+    for (let i = out.length; i < 4; i++) {
+      out.push({ id: `pending-${i}`, size: 0, node: '', status: 'pending' });
+    }
+    return out;
+  }, [fileData?.shards]);
+
+  const nodeSlots = useMemo(() => {
+    const s = fileData?.shards ?? [];
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const sh of s) {
+      if (sh.node && sh.node !== 'unassigned' && !seen.has(sh.node)) {
+        seen.add(sh.node);
+        ordered.push(sh.node);
+      }
+    }
+    while (ordered.length < 4) ordered.push(`node-${ordered.length + 1}`);
+    return ordered.slice(0, 4);
+  }, [fileData?.shards]);
+
+  useEffect(() => {
+    const fid = fileData?.fileId;
+    if (!fid) return;
+    fetch(`${API_BASE}/api/shard/${fid}`, { method: 'POST' })
+      .then((r) =>
+        parseJsonResponse<{ shards?: ShardEntry[] | null; encryptionStatus?: EncryptionStatus | null }>(r)
+      )
+      .then((data) => {
+        setFileData((prev) => ({
+          ...prev,
+          shards: data.shards ?? prev?.shards,
+          encryptionStatus: data.encryptionStatus ?? prev?.encryptionStatus,
+        }));
+      })
+      .catch(console.error);
+  }, [fileData?.fileId, setFileData]);
 
   useEffect(() => {
     const sequence = async () => {
@@ -68,22 +112,22 @@ export function EncryptionFlow() {
           {/* Step 2: Sharding */}
           <div className="flex flex-col items-center gap-6 z-10 relative w-64 h-full justify-center">
             <div className="grid grid-cols-2 gap-4">
-              {[0, 1, 2, 3].map((shard) => (
+              {gridShards.map((shard, shardIndex) => (
                 <motion.div 
-                   key={shard}
+                   key={shard.id}
                    initial={{ opacity: 0, scale: 0, rotate: -45 }}
                    animate={step >= 2 ? { opacity: 1, scale: 1, rotate: 0 } : {}}
-                   transition={{ delay: shard * 0.2, type: 'spring' }}
+                   transition={{ delay: shardIndex * 0.2, type: 'spring' }}
                    className="w-16 h-20 rounded-xl bg-brand-bg/80 border border-brand-primary/40 flex items-center justify-center flex-col gap-2 relative shadow-[0_0_15px_rgba(62,166,255,0.15)]"
                 >
                   <FileText className="w-6 h-6 text-brand-primary opacity-50" />
-                  <span className="text-[10px] font-bold text-slate-300">Shard {String.fromCharCode(65 + shard)}</span>
+                  <span className="text-[10px] font-bold text-slate-300">Shard {String.fromCharCode(65 + shardIndex)}</span>
                   {/* Flow to nodes */}
                   {step >= 3 && (
                     <motion.div 
                       initial={{ opacity: 0, width: 0 }}
                       animate={{ opacity: 1, width: 80 }}
-                      transition={{ delay: 0.5 + (shard * 0.1) }}
+                      transition={{ delay: 0.5 + (shardIndex * 0.1) }}
                       className="absolute top-1/2 -right-[90px] h-[2px] bg-brand-primary/40 origin-left"
                     >
                       <div className="w-2 h-2 rounded-full bg-brand-primary absolute right-0 top-1/2 -translate-y-1/2 shadow-[0_0_5px_rgba(62,166,255,0.8)]" />
@@ -101,9 +145,9 @@ export function EncryptionFlow() {
           {/* Step 3: Distributed Storage */}
           <div className="flex flex-col items-center gap-6 z-10 relative w-64 h-full justify-center">
             <div className="flex flex-col gap-4 w-full pl-16">
-              {[0, 1, 2, 3].map((node) => (
+              {nodeSlots.map((nodeName, node) => (
                 <motion.div 
-                   key={node}
+                   key={nodeName}
                    initial={{ opacity: 0, x: 20 }}
                    animate={step >= 3 ? { opacity: 1, x: 0 } : {}}
                    transition={{ delay: 0.5 + (node * 0.2) }}
@@ -114,7 +158,7 @@ export function EncryptionFlow() {
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between items-center mb-1">
-                      <h4 className="text-xs font-bold text-white">Node {node + 1}</h4>
+                      <h4 className="text-xs font-bold text-white">{nodeName}</h4>
                       <span className="text-[10px] text-green-400 font-mono">100%</span>
                     </div>
                     <div className="h-1 bg-brand-bg rounded-full overflow-hidden">
