@@ -14,6 +14,7 @@ export function Upload() {
   const [sessionId, setSessionId] = useState<string>('');
   const [scanStatus, setScanStatus] = useState<'analyzing' | 'ready'>('analyzing');
   const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [goldenKeyModal, setGoldenKeyModal] = useState<{isOpen: boolean, key: string}>({ isOpen: false, key: '' });
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const uploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -53,27 +54,24 @@ export function Upload() {
     setIsUploading(true);
     setProgress(0);
 
-    let current = 0;
-    uploadIntervalRef.current = setInterval(() => {
-      current += 10;
-      setProgress(current);
-      if (current >= 100 && uploadIntervalRef.current) {
-        clearInterval(uploadIntervalRef.current);
-      }
-    }, 300);
+    setProgress(0);
 
     try {
+      const { uploadFile } = await import('../../../services/api');
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      console.log("Sending upload request to backend at", `${API_BASE}/api/upload`);
-      const res = await fetch(`${API_BASE}/api/upload`, {
-        method: "POST",
-        body: formData
+      console.log("Sending upload request to backend");
+      const res = await uploadFile(formData, (progressEvent) => {
+        if (progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setProgress(percentCompleted);
+        }
       });
       console.log("Upload request completed, parsing response");
 
-      const data = await res.json();
+      const data = res.data;
+      const secretKey = data.secretKey || data.metadata?.secretKey;
 
       console.log("Backend response:", data);
 
@@ -84,15 +82,35 @@ export function Upload() {
         fileSize: data.fileSize ?? selectedFile.size,
         uploadStatus: data.uploadStatus ?? 'completed',
       }));
-      if (data.fileId) setFileId(data.fileId);
+      if (data.fileId) {
+        setFileId(data.fileId);
+        localStorage.setItem('sentinelActiveFile', data.fileId);
+      }
+      if (secretKey) {
+        localStorage.setItem('sentinelActiveKey', secretKey);
+      }
+
+      // Trigger Dashboard UI Security Log event globally
+      window.dispatchEvent(
+        new CustomEvent("newLog", {
+          detail: {
+            msg: "[INFO] AES-256 Encryption Applied & Sharded.",
+            status: "success",
+          },
+        })
+      );
+
+      if (secretKey) {
+        setGoldenKeyModal({ isOpen: true, key: secretKey });
+      } else {
+        navigateTimeoutRef.current = setTimeout(() => {
+          navigate('/app/compliance');
+        }, 3500);
+      }
 
     } catch (err) {
       console.error("Upload error:", err);
     }
-
-    navigateTimeoutRef.current = setTimeout(() => {
-      navigate('/app/compliance');
-    }, 3500);
   };
 
   
@@ -437,6 +455,34 @@ export function Upload() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {goldenKeyModal.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#061024]/80 backdrop-blur-sm p-4">
+            <div className="w-full max-w-md bg-slate-900 border border-brand-primary/50 rounded-2xl shadow-[0_0_50px_rgba(62,166,255,0.2)] p-6 text-center">
+              <div className="w-16 h-16 rounded-full bg-brand-primary/20 border border-brand-primary/50 flex items-center justify-center mx-auto mb-4">
+                <ShieldCheck className="w-8 h-8 text-brand-primary" />
+              </div>
+              <h3 className="text-xl font-heading font-bold text-white mb-2">
+                ⚠️ VAULT SEALED
+              </h3>
+              <p className="text-slate-400 text-sm mb-4">
+                Save your AES-256 Decryption Key. You will need this for reconstruction.
+              </p>
+              <div className="bg-slate-950 border border-slate-700 rounded-xl p-3 mb-6 select-all font-mono text-sm text-brand-primary break-all">
+                {goldenKeyModal.key}
+              </div>
+              <button
+                onClick={() => {
+                  setGoldenKeyModal({ isOpen: false, key: '' });
+                  navigate('/app/compliance');
+                }}
+                className="w-full px-4 py-3 text-sm font-bold rounded-lg bg-brand-primary text-slate-950 hover:bg-blue-400 transition-colors"
+              >
+                I have saved my key
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

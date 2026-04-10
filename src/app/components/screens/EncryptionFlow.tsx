@@ -8,8 +8,13 @@ import { API_BASE, parseJsonResponse } from '../../apiBase';
 
 export function EncryptionFlow() {
   const [step, setStep] = useState(0);
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { fileData, setFileData } = useFile();
+
+  useEffect(() => {
+    setActiveFileId(localStorage.getItem('sentinelActiveFile'));
+  }, []);
 
   const gridShards = useMemo(() => {
     const s = fileData?.shards ?? [];
@@ -93,7 +98,7 @@ export function EncryptionFlow() {
               )}
             </motion.div>
             <div className="text-center h-12">
-              <h3 className="font-heading font-semibold text-white">{step > 0 ? 'Encrypted File' : 'Raw File'}</h3>
+              <h3 className="font-heading font-semibold text-white">{step > 0 ? (activeFileId ? `Encrypted: ${activeFileId.slice(-8)}` : 'Encrypted File') : 'Raw File'}</h3>
               <p className="text-xs text-slate-400 mt-1">AES-256 Validated</p>
             </div>
             

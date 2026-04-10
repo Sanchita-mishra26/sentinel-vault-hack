@@ -2,6 +2,10 @@ const express = require("express");
 const router = express.Router();
 
 const storage = require("../utils/storage");
+const { createShards } = require("../controllers/shardController");
+
+// POST / Endpoint (Disabled as createShards is now internal)
+// router.post("/", createShards);
 
 router.delete("/delete-shard", (req, res) => {
   const { fileId, shardId } = req.body;

@@ -3,6 +3,7 @@ import { ShieldCheck, HardDrive, AlertOctagon, CheckCircle2, Clock, Activity, Za
 import { NetworkMap, NodeState } from '../NetworkMap';
 import { AIAssistant } from '../AIAssistant';
 import { motion, AnimatePresence } from 'motion/react';
+import { io } from 'socket.io-client';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, ReferenceDot } from 'recharts';
 
 const initialLogs = [
@@ -68,6 +69,9 @@ export function Dashboard() {
   // NEW: Real data from backend
   const [realStats, setRealStats] = useState<{ filesSecured: number; totalShards: number; activeNodes: number } | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
+  
+  // NEW: Socket data
+  const [remoteBreachData, setRemoteBreachData] = useState<{level: string, message: string} | null>(null);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -83,11 +87,9 @@ export function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('http://localhost:5000/api/stats');
-        if (!res.ok) {
-          throw new Error(`Stats request failed with status ${res.status}`);
-        }
-        const data = await res.json();
+        const { getStats } = await import('../../../services/api');
+        const res = await getStats();
+        const data = res.data;
         console.log('Dashboard stats:', data);
         setRealStats(prev => {
           const fallback = prev ?? { filesSecured: 0, totalShards: 0, activeNodes: baseNodes.length || 0 };
@@ -105,9 +107,21 @@ export function Dashboard() {
     };
 
     fetchStats();
-    // Refresh stats every 5 seconds
-    const interval = setInterval(fetchStats, 5000);
+    // Refresh stats every 10 seconds
+    const interval = setInterval(fetchStats, 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  // NEW: Listen for remote UI events (from Upload Component)
+  useEffect(() => {
+    const handleNewLog = (e: Event) => {
+      const ev = e as CustomEvent;
+      if (ev.detail && typeof ev.detail.msg === 'string') {
+        addLog(ev.detail.msg, ev.detail.status || 'info');
+      }
+    };
+    window.addEventListener('newLog', handleNewLog);
+    return () => window.removeEventListener('newLog', handleNewLog);
   }, []);
 
   const playBeep = () => {
@@ -131,6 +145,25 @@ export function Dashboard() {
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.5);
   };
+
+  useEffect(() => {
+    const socket = io('http://localhost:5000');
+    
+    socket.on('security_breach', (data: any) => {
+      console.log('Received socket security_breach', data);
+      setRemoteBreachData(data);
+      // Play beep sound when notification appears
+      playBeep();
+      setTimeout(() => playBeep(), 500);
+      
+      // Auto clear remote message after some time (optional)
+      setTimeout(() => setRemoteBreachData(null), 8000);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (attackState === 'attacked') {
@@ -263,30 +296,38 @@ export function Dashboard() {
     });
   };
 
-  const handleSimulate = () => {
-    if (!baseNodes.length) {
-      addLog('No nodes available for simulation.', 'warning');
+  const handleSimulate = async () => {
+    const activeFileId = localStorage.getItem('sentinelActiveFile');
+    if (!activeFileId) {
+      addLog('No active file found to simulate attack.', 'warning');
       return;
     }
-    const target = baseNodes[Math.floor(Math.random() * baseNodes.length)];
-    if (!target) {
-      addLog('Unable to select target node.', 'warning');
-      return;
+
+    try {
+      addLog('Initiating target attack protocol...', 'warning');
+      const { sabotageFile } = await import('../../../services/api');
+      const res = await sabotageFile(activeFileId);
+      
+      if (res.data.success) {
+        // Find Node 1 (id: '1')
+        const target = baseNodes.find(n => n.id === '1') || baseNodes[0];
+        setAttackTargetNodeId(target.id);
+        setLineFlicker(true);
+        setSelectedNodeId(target.id);
+        setAttackState('attacked');
+        addLog(`> [CRITICAL] Node 1 breached. Isolation protocol activated.`, 'error');
+
+        const isolateTimer = setTimeout(() => {
+          setAttackState('isolated');
+          setLineFlicker(false);
+          addLog('🔁 Redistributing shards...', 'info');
+        }, 800);
+
+        attackTimersRef.current.push(isolateTimer);
+      }
+    } catch (error) {
+      addLog('Simulated attack failed or API unreachable.', 'warning');
     }
-    setAttackTargetNodeId(target.id);
-    setLineFlicker(true);
-    setSelectedNodeId(target.id);
-    setAttackState('attacked');
-    addLog(`🚨 Threat detected on ${target.label}`, 'error');
-    addLog('🤖 AI isolating node...', 'warning');
-
-    const isolateTimer = setTimeout(() => {
-      setAttackState('isolated');
-      setLineFlicker(false);
-      addLog('🔁 Redistributing shards...', 'info');
-    }, 800);
-
-    attackTimersRef.current.push(isolateTimer);
   };
 
   const handleIsolate = () => {
@@ -429,6 +470,31 @@ export function Dashboard() {
 
       {/* ALERTS SYSTEM OVERLAY */}
       <AnimatePresence>
+        {remoteBreachData && (
+          <motion.div
+            key="remote-breach-alert"
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className={`fixed top-12 left-1/2 -translate-x-1/2 z-[100] border rounded-2xl p-6 shadow-2xl flex items-center gap-4 backdrop-blur-xl transition-all ${
+              remoteBreachData.level === 'critical' 
+                ? 'bg-red-950/95 border-red-500 shadow-[0_0_50px_rgba(239,68,68,0.6)] animate-pulse' 
+                : 'bg-orange-950/95 border-orange-500 shadow-[0_0_40px_rgba(249,115,22,0.4)]'
+            }`}
+          >
+            {remoteBreachData.level === 'critical' ? (
+              <AlertOctagon className="w-10 h-10 text-red-500 animate-bounce" />
+            ) : (
+              <AlertTriangle className="w-10 h-10 text-orange-400" />
+            )}
+            <span className={`font-heading font-bold text-xl tracking-wide uppercase ${
+              remoteBreachData.level === 'critical' ? 'text-red-500' : 'text-orange-400'
+            }`}>
+              {remoteBreachData.level === 'critical' ? '🚨 SYSTEM LOCKDOWN:' : '⚠️ Intrusion Alert:'} {remoteBreachData.message}
+            </span>
+          </motion.div>
+        )}
+
         {attackState === 'attacked' && (
           <motion.div
             key="attacked-alert"
@@ -626,13 +692,14 @@ export function Dashboard() {
                         isHighlighted
                           ? 'bg-brand-primary/40 border border-brand-primary shadow-[0_0_20px_rgba(62,166,255,0.8)]'
                           : node.state === 'critical'
-                          ? 'bg-red-500/40 border border-red-400 shadow-[0_0_12px_rgba(239,68,68,0.65)]'
+                          ? 'bg-red-500/80 border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,1)]'
                           : 'bg-emerald-400/40 border border-emerald-300/70 shadow-[0_0_12px_rgba(74,222,128,0.65)]'
                       }`}
                       style={{ left: `${node.x}%`, top: `${node.y}%` }}
                       aria-label={`Inspect ${node.label}`}
                     >
-                      <span className={`absolute inset-0 rounded-full ${node.state === 'critical' ? 'bg-red-500/40' : 'bg-emerald-300/30'} animate-ping`} />
+                      <span className={`absolute inset-0 rounded-full ${node.state === 'critical' ? 'bg-red-500/80' : 'bg-emerald-300/30'} animate-ping`} />
+                      {node.state === 'critical' && <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-red-500 animate-pulse bg-slate-900/80 px-1 rounded">OFFLINE</span>}
                     </motion.button>
 
                     {(hoveredNodeId === node.id || selectedNodeId === node.id) && (
@@ -825,7 +892,7 @@ export function Dashboard() {
                         innerRadius={50}
                         outerRadius={80}
                         activeIndex={activeThreatIndex}
-                        activeOuterRadius={86}
+                        activeShape={{ outerRadius: 86 } as any}
                         stroke="none"
                         paddingAngle={5}
                         onMouseEnter={(_, index) => setActiveThreatIndex(index)}

@@ -59,6 +59,7 @@ export interface ComplianceCheckSectionProps {
   onProceedEncryption: () => void;
   /** When no file is in context — optional idle copy */
   awaitingFile?: boolean;
+  activeFileId?: string | null;
 }
 
 /**
@@ -73,6 +74,7 @@ export function ComplianceCheckSection({
   actionMessage,
   onProceedEncryption,
   awaitingFile = false,
+  activeFileId,
 }: ComplianceCheckSectionProps) {
   const showEntities = scanResult === 'sensitive' && entities.length > 0;
 
@@ -90,7 +92,7 @@ export function ComplianceCheckSection({
 
         <div className="relative z-10 flex flex-col items-center justify-center h-full min-h-[280px]">
           <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-cyan-400/70 mb-6">
-            Document surface
+            Document surface {activeFileId && `(${activeFileId.slice(-8)})`}
           </p>
 
           <div className="relative w-full max-w-[280px] md:max-w-[320px] aspect-[3/4] rounded-2xl border border-cyan-500/25 bg-slate-950/70 backdrop-blur-sm shadow-[0_0_40px_rgba(62,166,255,0.08),inset_0_0_60px_rgba(0,0,0,0.5)] overflow-hidden">

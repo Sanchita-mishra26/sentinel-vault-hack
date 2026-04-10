@@ -27,7 +27,13 @@ const generateSessionString = (length = 96) => {
   return out;
 };
 
+import { useFile } from '../context/FileContext';
+import { deleteFile, downloadFile } from '../../services/api';
+
 export default function ShardManager() {
+  const { fileData } = useFile();
+  const fileId = fileData?.fileId;
+
   const [hoveredShard, setHoveredShard] = useState<string | null>(null);
   const [compromisedNode, setCompromisedNode] = useState<number | null>(null);
   const [compromisedShard, setCompromisedShard] = useState<string | null>(null);
@@ -38,6 +44,10 @@ export default function ShardManager() {
     D: 'Verifying integrity...',
   });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  
+  // NEW STATE FOR TASK 4
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authKeyInput, setAuthKeyInput] = useState('');
 
   useEffect(() => {
     const timers = SHARDS.map((shard, index) =>
@@ -51,22 +61,52 @@ export default function ShardManager() {
 
   const hoveredShardMeta = useMemo(() => SHARDS.find((s) => s.id === hoveredShard) ?? null, [hoveredShard]);
 
-  const handleDownloadShard = (shard: ShardInfo) => {
-    setToastMessage('🔓 Decrypting shard...');
+  const handleDownloadShard = (shard: ShardInfo, e: React.MouseEvent) => {
+    e.preventDefault();
+    if (!fileId) {
+      setToastMessage('🚨 Error: No active file uploaded!');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    setAuthModalOpen(true);
+  };
 
-    setTimeout(() => {
-      const content = generateSessionString();
-      const blob = new Blob([content], { type: 'text/plain' });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `${shard.title.toLowerCase().replace(/\s+/g, '-')}-raw.txt`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      URL.revokeObjectURL(url);
-      setToastMessage(null);
-    }, 900);
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const correctKey = localStorage.getItem('sentinelActiveKey');
+    if (authKeyInput === correctKey) {
+      setToastMessage('✅ Cryptographic Signature Verified. Pulling failover replicas...');
+      setAuthModalOpen(false);
+      setAuthKeyInput('');
+      setTimeout(() => {
+        try {
+          downloadFile(fileId!);
+        } catch (err) {
+          setToastMessage('❌ Download failed.');
+          setTimeout(() => setToastMessage(null), 3000);
+        }
+      }, 1500);
+    } else {
+      setToastMessage('❌ Access Denied: Invalid Key Signature.');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  const handleDeleteFile = async () => {
+    if (!fileId) {
+      setToastMessage('🚨 Error: No active file to purge!');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    setToastMessage(`🗑️ Purging distributed fragments...`);
+    try {
+      await deleteFile(fileId);
+      setToastMessage('✔ Fragments purged completely.');
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (e) {
+      setToastMessage('❌ Deletion failed.');
+      setTimeout(() => setToastMessage(null), 3000);
+    }
   };
 
   const handleSimulateFailure = () => {
@@ -239,14 +279,25 @@ export default function ShardManager() {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleDownloadShard(shard)}
-                  className="mt-4 inline-flex items-center gap-2 text-xs font-semibold text-brand-primary border border-brand-primary/30 bg-brand-primary/10 rounded-lg px-3 py-1.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(62,166,255,0.35)]"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Download Raw Shard
-                </button>
+                <div className="flex flex-col gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDownloadShard(shard, e)}
+                    className="w-full inline-flex items-center justify-center gap-2 text-xs font-semibold text-brand-primary border border-brand-primary/30 bg-brand-primary/10 rounded-lg px-3 py-1.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(62,166,255,0.35)]"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Reconstruct & Download
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDeleteFile}
+                    className="w-full inline-flex items-center justify-center gap-2 text-xs font-semibold text-red-400 border border-red-500/30 bg-red-500/10 rounded-lg px-3 py-1.5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_14px_rgba(239,68,68,0.35)]"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    Purge All Fragments
+                  </button>
+                </div>
 
                 {hoveredShard === shard.id && (
                   <div className="absolute right-3 top-3 w-48 rounded-lg border border-brand-primary/30 bg-[#061024]/95 p-3 text-[11px] text-slate-200 shadow-[0_10px_30px_rgba(0,0,0,0.4)] animate-[fadeIn_.2s_ease-out]">
@@ -265,6 +316,44 @@ export default function ShardManager() {
         <p>[SYSTEM] Monitoring shard health</p>
         <p>[SYSTEM] All nodes synchronized</p>
       </div>
+
+      {authModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#061024]/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-brand-primary/50 rounded-2xl shadow-[0_0_50px_rgba(62,166,255,0.2)] p-6">
+            <h3 className="text-xl font-heading font-bold text-white mb-2 flex items-center gap-2">
+              <ShieldCheck className="w-6 h-6 text-brand-primary" />
+              🔒 Authorization Required
+            </h3>
+            <p className="text-slate-400 text-sm mb-6">
+              Enter AES-256 Decryption Key to initiate polynomial reconstruction.
+            </p>
+            <form onSubmit={handleAuthSubmit} className="flex flex-col gap-4">
+              <input
+                type="text"
+                className="w-full bg-slate-950 border border-brand-border/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-brand-primary/80"
+                placeholder="Enter Secret Key..."
+                value={authKeyInput}
+                onChange={(e) => setAuthKeyInput(e.target.value)}
+              />
+              <div className="flex gap-3 justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={() => setAuthModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-700 hover:bg-slate-800 text-slate-300 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-semibold rounded-lg bg-brand-primary text-slate-950 hover:bg-blue-400 transition-colors"
+                >
+                  Verify Key
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

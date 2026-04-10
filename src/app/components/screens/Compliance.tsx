@@ -57,6 +57,11 @@ export function Compliance() {
   }, [isScanning, report, piiCount]);
 
   const awaitingFile = !fileId;
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveFileId(localStorage.getItem('sentinelActiveFile'));
+  }, []);
 
   return (
     <div className="flex flex-col h-full gap-8 p-8 max-w-6xl mx-auto">
@@ -74,6 +79,7 @@ export function Compliance() {
         actionMessage={report?.message}
         onProceedEncryption={() => navigate('/app/encryption')}
         awaitingFile={awaitingFile}
+        activeFileId={activeFileId}
       />
     </div>
   );

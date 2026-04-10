@@ -7,13 +7,72 @@ export function Auth() {
   const location = useLocation();
   const initialMode = location.state?.mode === "signup" ? false : true;
 
-  const [isLogin, setIsLogin] = useState(initialMode);
-  const navigate = useNavigate();
+  const [isLogin, setIsLogin] = useState(initialMode);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isMFALocked, setIsMFALocked] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+  const [toastMsg, setToastMsg] = useState<{msg: string; type: 'warning' | 'critical' | 'error' | null}>({msg: '', type: null});
+  const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    navigate("/app/dashboard");
-  };
+  const playBeep = () => {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.5);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!isLogin) {
+      navigate("/app/dashboard");
+      return;
+    }
+
+    if (isMFALocked) {
+      if (mfaCode === "123456") {
+        navigate("/app/dashboard");
+      } else {
+        setToastMsg({ msg: '❌ Authentication Failed. IP Logged.', type: 'error' });
+      }
+      return;
+    }
+
+    try {
+      const { login } = await import('../../../services/api');
+      const res = await login({ email, password });
+      
+      if (res.data.success && res.data.role) {
+        // Successful login
+        navigate("/app/dashboard");
+        return;
+      }
+      
+      if (res.data.triggerMFA) {
+        setIsMFALocked(true);
+        playBeep();
+        if (res.data.alertType === 'dual_alert_triggered' || res.data.alertType === 'admin_notified') {
+          setToastMsg({ msg: '⚠️ [SYSTEM] Unauthorized access flagged. Live Admin Dashboard alerted & SMS warning dispatched.', type: 'warning' });
+        } else if (res.data.alertType === 'sms_sent') {
+          setToastMsg({ msg: '🚨 [CRITICAL] Admin credentials failed. MFA SMS sent to 8377891315.', type: 'critical' });
+        } else {
+          setToastMsg({ msg: '⚠️ [SYSTEM] Unauthorized access flagged. MFA Required.', type: 'warning' });
+        }
+      } else {
+        setToastMsg({ msg: '❌ Invalid credentials.', type: 'error' });
+      }
+    } catch (err) {
+      setToastMsg({ msg: '❌ Authentication server offline or refused connection.', type: 'error' });
+    }
+  };
 
   return (
     <div className="min-h-screen bg-brand-bg flex flex-col">
@@ -68,10 +127,19 @@ export function Auth() {
                   Welcome to Sentinel
                 </h2>
 
-                <p className="text-slate-400 text-sm">
-                  Secure access to the distributed data vault.
-                </p>
-              </div>
+                <p className="text-slate-400 text-sm">
+                  Secure access to the distributed data vault.
+                </p>
+                {toastMsg.msg && (
+                  <div className={`mt-4 p-3 rounded-lg text-sm font-semibold border text-left ${
+                    toastMsg.type === 'critical' ? 'bg-red-500/20 border-red-500/50 text-red-300' :
+                    toastMsg.type === 'warning' ? 'bg-amber-500/20 border-amber-500/50 text-amber-300' :
+                    'bg-red-500/10 border-red-500/30 text-red-400'
+                  }`}>
+                    {toastMsg.msg}
+                  </div>
+                )}
+              </div>
 
               {/* Toggle Login/Signup */}
               <div className="flex bg-brand-bg/60 p-1 rounded-xl border border-brand-border/40 sticky top-0 z-10">
@@ -119,33 +187,54 @@ export function Auth() {
                   </div>
                 )}
 
-                <div>
-                  <label className="text-xs text-slate-400">Email</label>
+                <div>
+                  <label className="text-xs text-slate-400">Email</label>
 
-                  <div className="relative mt-1">
-                    <Mail className="w-5 h-5 absolute left-3 top-3 text-slate-500" />
+                  <div className="relative mt-1">
+                    <Mail className="w-5 h-5 absolute left-3 top-3 text-slate-500" />
 
-                    <input
-                      type="email"
-                      placeholder="admin@sentinel.com"
-                      className="w-full bg-brand-bg border border-brand-border rounded-xl py-3 pl-10 pr-4 text-white"
-                    />
-                  </div>
-                </div>
+                    <input
+                      type="email"
+                      placeholder="admin@sentinel.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      disabled={isMFALocked}
+                      className="w-full bg-brand-bg border border-brand-border rounded-xl py-3 pl-10 pr-4 text-white disabled:opacity-50"
+                    />
+                  </div>
+                </div>
 
-                <div>
-                  <label className="text-xs text-slate-400">Password</label>
+                {!isMFALocked ? (
+                  <div>
+                    <label className="text-xs text-slate-400">Password</label>
 
-                  <div className="relative mt-1">
-                    <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-500" />
+                    <div className="relative mt-1">
+                      <Lock className="w-5 h-5 absolute left-3 top-3 text-slate-500" />
 
-                    <input
-                      type="password"
-                      placeholder="••••••••"
-                      className="w-full bg-brand-bg border border-brand-border rounded-xl py-3 pl-10 pr-4 text-white"
-                    />
-                  </div>
-                </div>
+                      <input
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="w-full bg-brand-bg border border-brand-border rounded-xl py-3 pl-10 pr-4 text-white"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-xs text-red-400 font-bold">MFA Required</label>
+                    <div className="relative mt-1">
+                      <Shield className="w-5 h-5 absolute left-3 top-3 text-red-500 animate-pulse" />
+                      <input
+                        type="text"
+                        placeholder="Enter 6-Digit MFA Authenticator Code"
+                        value={mfaCode}
+                        onChange={(e) => setMfaCode(e.target.value)}
+                        className="w-full bg-red-950/20 border border-red-500/50 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-red-500/50 focus:border-red-500 focus:outline-none focus:shadow-[0_0_15px_rgba(239,68,68,0.3)] transition-shadow"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {!isLogin && (
                   <div>

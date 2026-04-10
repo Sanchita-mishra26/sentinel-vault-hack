@@ -1,92 +1,98 @@
-const storage = require("../utils/storage");
-const handleUpload = (req, res) => {
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const pdfParse = require("pdf-parse");
+const storage = require("../utils/storage"); // 1. REQUIRE YOUR STORAGE UTIL
+const { createShardsInternal } = require("./shardController");
+
+const handleUpload = async (req, res) => {
   try {
     console.log("🔥 UPLOAD CONTROLLER HIT");
     const file = req.file;
 
     if (!file) {
-      return res.status(400).json({ message: "No file uploaded" });
+      return res.status(400).json({ success: false, message: "No file uploaded" });
     }
 
     console.log("📄 File received:", file.originalname);
 
-    // Encryption
-    const encryptedData = file.buffer.toString("base64");
-    console.log("🔐 File encrypted (base64)");
+    let piiResult = null;
+    let piiStatus = "success";
 
-    // Sharding
-    const TOTAL_SHARDS = 5;
-    const BACKUP_SHARDS = 2;
+    // PII Scanning Block
+    try {
+      const data = await pdfParse(file.buffer);
+      const text = data.text || "";
+      const emails = (text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/ig) || []).length;
+      const phones = (text.match(/\b\d{10}\b/g) || []).length;
+      const creditCards = (text.match(/\b\d{16}\b/g) || []).length;
 
-    const shardSize = Math.ceil(encryptedData.length / TOTAL_SHARDS);
-    const shards = [];
+      const totalMatches = emails + phones + creditCards;
+      let threatLevel = "Low";
+      if (totalMatches > 3) threatLevel = "High";
+      else if (totalMatches >= 1) threatLevel = "Medium";
 
-    for (let i = 0; i < TOTAL_SHARDS; i++) {
-      const start = i * shardSize;
-      const end = start + shardSize;
-
-      shards.push({
-        id: `shard-${i + 1}`,
-        data: encryptedData.slice(start, end)
-      });
+      piiResult = { emails, phones, creditCards, threatLevel };
+    } catch (scanError) {
+      console.error("PII Scan Error (Skipping):", scanError.message);
+      piiStatus = "skipped_or_failed";
     }
 
-    const backup = shards.slice(0, BACKUP_SHARDS).map((s, i) => ({
-      id: `backup-${i + 1}`,
-      data: s.data
-    }));
+    // Encryption Block
+    const algorithm = "aes-256-gcm";
+    const secretKey = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(12);
 
-    const allShards = [...shards, ...backup];
-    console.log(`🧩 Shards created: ${allShards.length}`);
+    const cipher = crypto.createCipheriv(algorithm, secretKey, iv);
+    const encryptedBuffer = Buffer.concat([cipher.update(file.buffer), cipher.final()]);
+    const authTag = cipher.getAuthTag();
 
-    // Node Simulation
-    const nodes = {
-      node1: [],
-      node2: [],
-      node3: [],
-      node4: [],
-      node5: []
+    const uploadDir = path.join(__dirname, "..", "uploads");
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+    const fileId = `file-${Date.now()}`; // 2. CREATE A UNIQUE ID FOR THE FILE
+    const encryptedFileName = `enc-${Date.now()}-${file.originalname}`;
+    const encryptedFilePath = path.join(uploadDir, encryptedFileName);
+
+    fs.writeFileSync(encryptedFilePath, Buffer.concat([encryptedBuffer, authTag]));
+    console.log("🔐 File encrypted and stored at:", encryptedFilePath);
+
+    // --- AUTOMATIC SHARDING & REDUNDANCY ---
+    console.log("🔪 Triggering Automatic Sharding...");
+    let shardPaths = [];
+    try {
+      shardPaths = await createShardsInternal(encryptedFilePath, 3);
+      console.log("✅ Sharding & Redundancy Complete.");
+    } catch (shardErr) {
+      console.error("❌ Auto-Sharding Failed:", shardErr.message);
+    }
+
+    // 3. SAVE METADATA TO STORAGE (Crucial for Part 3)
+    // We save the keys so we can reconstruct the file later
+    storage.files[fileId] = {
+      originalName: file.originalname,
+      encryptedPath: encryptedFilePath,
+      secretKey: secretKey.toString("hex"),
+      iv: iv.toString("hex"),
+      authTag: authTag.toString("hex"),
+      shards: shardPaths.map(p => path.basename(p)),
+      piiStatus: piiStatus,
+      threatLevel: piiResult ? piiResult.threatLevel : "N/A"
     };
 
-    // Distribute shards across nodes (round-robin)
-    allShards.forEach((shard, index) => {
-      const nodeKeys = Object.keys(nodes);
-      const nodeIndex = index % nodeKeys.length;
-      const nodeName = nodeKeys[nodeIndex];
+    console.log(`💾 Metadata saved for File ID: ${fileId}`);
 
-      nodes[nodeName].push(shard);
-    });
-
-    console.log("Shards distributed across nodes");
-
-    // 🆔 create fileId
-const fileId = `file-${Date.now()}`;
-
-// store in memory
-storage.files[fileId] = {
-  fileName: file.originalname,
-  nodes,
-  shards: allShards
-};
-
-console.log("💾 File stored in memory:", fileId);
-
+    // Success Response Payload
     res.json({
-      message: "File processed successfully",
-      fileId,
-      fileName: file.originalname,
-      fileSize: file.size,
-      uploadStatus: "completed",
-      totalShards: allShards.length,
-      nodes: Object.keys(nodes).map((node) => ({
-        node,
-        shardCount: nodes[node].length,
-      })),
+      success: true,
+      fileId: fileId,
+      message: "File processed, encrypted, and distributed.",
+      metadata: storage.files[fileId]
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Upload failed" });
+    console.error("Encryption/Upload Error:", error);
+    res.status(500).json({ success: false, message: "Encryption and Upload failed" });
   }
 };
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bot, X, Send, Sparkles, Activity } from 'lucide-react';
+import { chatWithAI } from '../../services/api';
 
 export function AIAssistant() {
   const [isOpen, setIsOpen] = useState(false);
@@ -29,18 +30,28 @@ export function AIAssistant() {
     return () => clearInterval(t);
   }, [isThinking]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim()) return;
     
-    setMessages(prev => [...prev, { text: inputText, isUser: true }]);
+    const userMessage = inputText;
+    setMessages(prev => [...prev, { text: userMessage, isUser: true }]);
     setInputText('');
     setIsThinking(true);
     
-    setTimeout(() => {
-      setMessages(prev => [...prev, { text: "Acknowledged. Analyzing system state... All parameters secure.", isUser: false }]);
+    try {
+      const response = await chatWithAI(userMessage);
+      if (response.data && response.data.success) {
+        setMessages(prev => [...prev, { text: response.data.reply, isUser: false }]);
+      } else {
+        setMessages(prev => [...prev, { text: "System Warning: AI response anomaly detected.", isUser: false }]);
+      }
+    } catch (error) {
+      console.error("AI chat error:", error);
+      setMessages(prev => [...prev, { text: "Critical: Connection to Sentinel Core Intelligence failed.", isUser: false }]);
+    } finally {
       setIsThinking(false);
-    }, 1500);
+    }
   };
 
   return (
