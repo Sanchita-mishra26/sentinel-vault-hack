@@ -108,8 +108,11 @@ export function Upload() {
         }, 3500);
       }
 
-    } catch (err) {
+    } catch (err: any) {
       console.error("Upload error:", err);
+      if (err.message && err.message.includes('DDoS')) {
+        alert(err.message);
+      }
     }
   };
 

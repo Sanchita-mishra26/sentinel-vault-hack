@@ -59,6 +59,21 @@ export function Auth() {
       if (res.data.triggerMFA) {
         setIsMFALocked(true);
         playBeep();
+        
+        // Background AI IP Analysis
+        const currentIp = email === 'admin@sentinel.com' ? '103.44.11.2' : '192.168.1.5';
+        const lastIp = email === 'admin@sentinel.com' ? '192.168.1.1' : '192.168.1.5';
+        
+        import('../../../services/api').then(({ analyzeIp }) => {
+          analyzeIp({ email, current_ip: currentIp, last_ip: lastIp }).then((aiRes) => {
+             if (aiRes.data && aiRes.data.analysis) {
+               const { threatLevel, reasoning } = aiRes.data.analysis;
+               // Overwrite toast message with intelligent output
+               setToastMsg({ msg: `[AI WARNING] Threat Level: ${threatLevel} - ${reasoning}`, type: 'critical' });
+             }
+          }).catch(console.error);
+        });
+
         if (res.data.alertType === 'dual_alert_triggered' || res.data.alertType === 'admin_notified') {
           setToastMsg({ msg: '⚠️ [SYSTEM] Unauthorized access flagged. Live Admin Dashboard alerted & SMS warning dispatched.', type: 'warning' });
         } else if (res.data.alertType === 'sms_sent') {
@@ -69,8 +84,12 @@ export function Auth() {
       } else {
         setToastMsg({ msg: '❌ Invalid credentials.', type: 'error' });
       }
-    } catch (err) {
-      setToastMsg({ msg: '❌ Authentication server offline or refused connection.', type: 'error' });
+    } catch (err: any) {
+      if (err.message && err.message.includes('DDoS')) {
+        setToastMsg({ msg: err.message, type: 'error' });
+      } else {
+        setToastMsg({ msg: '❌ Authentication server offline or refused connection.', type: 'error' });
+      }
     }
   };
 

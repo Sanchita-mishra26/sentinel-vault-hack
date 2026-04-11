@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ScanLine } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useFile } from '../../context/FileContext';
+import { useFile, ComplianceReport } from '../../context/FileContext';
 import { API_BASE, parseJsonResponse } from '../../apiBase';
 import { ComplianceCheckSection } from '../compliance/ComplianceCheckSection';
 
@@ -23,9 +23,9 @@ export function Compliance() {
     (async () => {
       try {
         const res = await fetch(`${API_BASE}/api/compliance/${fileId}`);
-        const data = await parseJsonResponse(res);
+        const data = await parseJsonResponse<ComplianceReport>(res);
         if (!cancelled) {
-          setFileData((prev) => ({ ...prev, complianceReport: data }));
+          setFileData((prev) => ({ ...(prev || {}), complianceReport: data }));
         }
       } catch (e) {
         console.error(e);

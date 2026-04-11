@@ -4,6 +4,7 @@ const path = require("path");
 const pdfParse = require("pdf-parse");
 const storage = require("../utils/storage"); // 1. REQUIRE YOUR STORAGE UTIL
 const { createShardsInternal } = require("./shardController");
+const { PDFDocument } = require("pdf-lib");
 
 const handleUpload = async (req, res) => {
   try {
@@ -65,6 +66,46 @@ const handleUpload = async (req, res) => {
       console.log("✅ Sharding & Redundancy Complete.");
     } catch (shardErr) {
       console.error("❌ Auto-Sharding Failed:", shardErr.message);
+    }
+
+    // --- VISUAL SHARDING (PDF Pages) ---
+    console.log("👁️ Triggering Visual Sharding...");
+    try {
+      if (file.mimetype === "application/pdf") {
+        const pdfDoc = await PDFDocument.load(file.buffer);
+        const totalPages = pdfDoc.getPageCount();
+        const nodes = ['node_a', 'node_b', 'node_c'];
+        const storageBase = path.join(process.cwd(), 'storage');
+
+        nodes.forEach(n => {
+          const dir = path.join(storageBase, n);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        });
+
+        const pagesPerShard = Math.ceil(totalPages / 3);
+        for (let i = 0; i < 3; i++) {
+          const newPdf = await PDFDocument.create();
+          const startPage = i * pagesPerShard;
+          let endPage = (i + 1) * pagesPerShard;
+          if (endPage > totalPages) endPage = totalPages;
+          
+          const pagesToCopy = [];
+          for (let p = startPage; p < endPage; p++) {
+            pagesToCopy.push(p);
+          }
+          
+          if (pagesToCopy.length > 0) {
+            const copiedPages = await newPdf.copyPages(pdfDoc, pagesToCopy);
+            copiedPages.forEach(page => newPdf.addPage(page));
+            const pdfBytes = await newPdf.save();
+            const nodeFilePath = path.join(storageBase, nodes[i], `fragment_${fileId}.pdf`);
+            fs.writeFileSync(nodeFilePath, pdfBytes);
+            console.log(`📄 Saved visual shard to ${nodeFilePath}`);
+          }
+        }
+      }
+    } catch (visualErr) {
+      console.error("❌ Visual Sharding Failed:", visualErr.message);
     }
 
     // 3. SAVE METADATA TO STORAGE (Crucial for Part 3)

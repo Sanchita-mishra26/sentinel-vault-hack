@@ -29,6 +29,7 @@ const generateSessionString = (length = 96) => {
 
 import { useFile } from '../context/FileContext';
 import { deleteFile, downloadFile } from '../../services/api';
+import { API_BASE } from '../apiBase';
 
 export default function ShardManager() {
   const { fileData } = useFile();
@@ -44,6 +45,7 @@ export default function ShardManager() {
     D: 'Verifying integrity...',
   });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isPurged, setIsPurged] = useState(false);
   
   // NEW STATE FOR TASK 4
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -75,7 +77,7 @@ export default function ShardManager() {
     e.preventDefault();
     const correctKey = localStorage.getItem('sentinelActiveKey');
     if (authKeyInput === correctKey) {
-      setToastMessage('✅ Cryptographic Signature Verified. Pulling failover replicas...');
+      setToastMessage('✅ Signature Verified. Decrypting file...');
       setAuthModalOpen(false);
       setAuthKeyInput('');
       setTimeout(() => {
@@ -87,8 +89,18 @@ export default function ShardManager() {
         }
       }, 1500);
     } else {
-      setToastMessage('❌ Access Denied: Invalid Key Signature.');
+      setToastMessage('❌ Decryption Failed: Invalid AES Key. Serving mathematical garbage.');
       setTimeout(() => setToastMessage(null), 3000);
+      
+      const garbage = new Uint8Array(4096);
+      window.crypto.getRandomValues(garbage);
+      const blob = new Blob([garbage], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'ACCESS_DENIED_GIBBERISH.bin';
+      a.click();
+      URL.revokeObjectURL(url);
     }
   };
 
@@ -101,8 +113,14 @@ export default function ShardManager() {
     setToastMessage(`🗑️ Purging distributed fragments...`);
     try {
       await deleteFile(fileId);
-      setToastMessage('✔ Fragments purged completely.');
-      setTimeout(() => setToastMessage(null), 3000);
+      
+      localStorage.removeItem('sentinelActiveFile');
+      localStorage.removeItem('sentinelActiveKey');
+      
+      setIsPurged(true);
+      
+      setToastMessage('🔥 DATA PURGED: All fragments and keys have been permanently neutralized.');
+      setTimeout(() => setToastMessage(null), 6000);
     } catch (e) {
       setToastMessage('❌ Deletion failed.');
       setTimeout(() => setToastMessage(null), 3000);
@@ -128,12 +146,43 @@ export default function ShardManager() {
     }, 1600);
   };
 
+  const handleDownloadFragment = async (nodeChar: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!fileId) {
+      setToastMessage('🚨 Error: No active file uploaded!');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/download/shard/${fileId}/${nodeChar}`);
+      if (!response.ok) throw new Error('Fragment not found');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `shard_${nodeChar}_${fileId}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch(err) {
+      setToastMessage(`❌ Error downloading Fragment ${nodeChar}.`);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
   return (
     <div className="glass-card rounded-2xl p-8 border border-brand-border/60 space-y-6 bg-gradient-to-br from-[#0B1220]/95 to-[#111A2F]/95 shadow-[0_20px_80px_rgba(0,0,0,0.45)] relative overflow-hidden">
       <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(62,166,255,0.14),transparent_45%)]" />
 
       {toastMessage && (
-        <div className="absolute top-4 right-4 z-30 rounded-lg border border-brand-primary/40 bg-brand-primary/15 px-3 py-2 text-xs font-semibold text-brand-primary backdrop-blur-sm animate-pulse">
+        <div className={`absolute top-4 right-4 z-30 rounded-lg border px-3 py-2 text-xs font-semibold backdrop-blur-sm animate-pulse ${
+          toastMessage.includes('PURGED') || toastMessage.includes('Error') || toastMessage.includes('❌') 
+          ? 'border-red-500/50 bg-red-900/60 text-red-200 shadow-[0_0_20px_rgba(239,68,68,0.3)]' 
+          : 'border-brand-primary/40 bg-brand-primary/15 text-brand-primary'
+        }`}>
           {toastMessage}
         </div>
       )}
@@ -164,14 +213,14 @@ export default function ShardManager() {
           <div className="flex items-center gap-2 text-slate-300 text-sm">
             <ShieldCheck className="w-4 h-4 text-emerald-400" /> Active Shards
           </div>
-          <p className="text-2xl font-semibold text-white mt-2">24</p>
+          <p className="text-2xl font-semibold text-white mt-2">{isPurged ? 0 : 24}</p>
         </div>
 
         <div className="rounded-xl border border-brand-border/50 bg-brand-bg/60 p-4">
           <div className="flex items-center gap-2 text-slate-300 text-sm">
             <Network className="w-4 h-4 text-brand-accent" /> Distribution Nodes
           </div>
-          <p className="text-2xl font-semibold text-white mt-2">3</p>
+          <p className="text-2xl font-semibold text-white mt-2">{isPurged ? 0 : 3}</p>
         </div>
 
         <div className="rounded-xl border border-brand-border/50 bg-brand-bg/60 p-4">
@@ -187,8 +236,8 @@ export default function ShardManager() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {[1, 2, 3, 4, 5].map((node) => {
             const isCompromised = compromisedNode === node;
-            const isActive = node <= 4 && !isCompromised;
-            const isIdle = node === 5 && !isCompromised;
+            const isActive = node <= 4 && !isCompromised && !isPurged;
+            const isIdle = (node === 5 || isPurged) && !isCompromised;
             const isHighlighted =
               !isCompromised &&
               hoveredShardMeta &&
@@ -233,7 +282,7 @@ export default function ShardManager() {
       <div className="relative z-10">
         <h3 className="text-sm font-semibold text-slate-200 mb-3 tracking-wide">Shard Grid</h3>
         <div className="grid md:grid-cols-2 gap-4">
-          {SHARDS.map((shard) => {
+          {!isPurged && SHARDS.map((shard) => {
             const isCompromised = compromisedShard === shard.id;
 
             return (

@@ -9,6 +9,7 @@ const pdfParse = require("pdf-parse");
 const fileRoutes = require("./routes/fileRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const authRoutes = require("./routes/authRoutes");
+const rateLimit = require("express-rate-limit");
 
 require("dotenv").config();
 
@@ -34,6 +35,24 @@ app.use(
 app.use(express.json());
 
 
+
+// Rate Limiters
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 100,
+  message: { success: false, message: "🚨 Security Protocol: Too many requests. IP throttled for 15 minutes." }
+});
+
+const strictLimiter = rateLimit({
+  windowMs: 60 * 1000, 
+  max: 5,
+  message: { success: false, message: "🚨 Security Protocol: Too many requests. IP throttled for 60 seconds." }
+});
+
+// Apply Limiters
+app.use("/api", globalLimiter);
+app.use("/api/auth/login", strictLimiter);
+app.use("/api/upload", strictLimiter);
 
 // Main Routes
 app.use("/api", fileRoutes);

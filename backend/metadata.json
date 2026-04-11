@@ -124,5 +124,89 @@
     ],
     "piiStatus": "skipped_or_failed",
     "threatLevel": "N/A"
+  },
+  "file-1775807671218": {
+    "originalName": "pitching.pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775807671218-pitching.pdf",
+    "secretKey": "ee253581dcb712c77abca4228b0c8b693ab44913047c1b31e0afdcbc1a92484a",
+    "iv": "8bbc50897b7835e7e79de6a5",
+    "authTag": "f0127addbcfb479df4b7d7eb86bbc896",
+    "shards": [
+      "enc-1775807671218-pitching.pdf.part_0",
+      "enc-1775807671218-pitching.pdf.part_1",
+      "enc-1775807671218-pitching.pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1775807725231": {
+    "originalName": "pitching.pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775807725231-pitching.pdf",
+    "secretKey": "d6fa3a0adade21f23037434e6990118be32ca1aedc77a57825bae911b43cc966",
+    "iv": "1f548ce96375ad48c19d6f51",
+    "authTag": "906ac17bbc79db55708d37ec28d86b49",
+    "shards": [
+      "enc-1775807725231-pitching.pdf.part_0",
+      "enc-1775807725231-pitching.pdf.part_1",
+      "enc-1775807725231-pitching.pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1775812416364": {
+    "originalName": "Email (1).pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775812416364-Email (1).pdf",
+    "secretKey": "9d6e954c94d324daba08ea558c0158d0c7810d66ca417d6888829de5b8bb3ace",
+    "iv": "d9a30821ff41df63463140c0",
+    "authTag": "7baf8da40d901d6c7c1e9307ba719f95",
+    "shards": [
+      "enc-1775812416364-Email (1).pdf.part_0",
+      "enc-1775812416364-Email (1).pdf.part_1",
+      "enc-1775812416364-Email (1).pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1775812792086": {
+    "originalName": "Email (1).pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775812792086-Email (1).pdf",
+    "secretKey": "8a229d3582bc6fc57f894217442866c141cbb6b4c03742507b293fecca8996e6",
+    "iv": "eed210d1c62291f45b42f657",
+    "authTag": "52d094a603b74fa8e38c3de79b8298f1",
+    "shards": [
+      "enc-1775812792086-Email (1).pdf.part_0",
+      "enc-1775812792086-Email (1).pdf.part_1",
+      "enc-1775812792086-Email (1).pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1775890678425": {
+    "originalName": "pitching.pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775890678425-pitching.pdf",
+    "secretKey": "6e74ba72f2c20d116213cef1b1f9bf2ca2695887a835f1dad7ef02082b76b25b",
+    "iv": "018237353c6fa848ba62bd8e",
+    "authTag": "c4a499e926fe6745ae5b6b35dfc6baad",
+    "shards": [
+      "enc-1775890678425-pitching.pdf.part_0",
+      "enc-1775890678425-pitching.pdf.part_1",
+      "enc-1775890678425-pitching.pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1775891269598": {
+    "originalName": "pitching.pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1775891269598-pitching.pdf",
+    "secretKey": "6f1d2837a51b23dfb000ac79d6948c952b85d5e12eac56d1b71ffcafcec229c9",
+    "iv": "35cb8819fbc2b64167900fbb",
+    "authTag": "203dc2c761c12e238d9142ef19cbc111",
+    "shards": [
+      "enc-1775891269598-pitching.pdf.part_0",
+      "enc-1775891269598-pitching.pdf.part_1",
+      "enc-1775891269598-pitching.pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
   }
 }

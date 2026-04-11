@@ -35,6 +35,22 @@ router.get("/download/:fileId", (req, res) => {
   handleDownload(req, res);
 });
 
+// ✅ DOWNLOAD VISUAL SHARD
+router.get("/download/shard/:fileId/:nodeId", (req, res) => {
+  const { fileId, nodeId } = req.params;
+  console.log(`📥 VISUAL SHARD DOWNLOAD HIT - Node ${nodeId}`);
+  
+  const storageBase = path.join(process.cwd(), 'storage');
+  const nodeDir = `node_${nodeId.toLowerCase()}`;
+  const shardPath = path.join(storageBase, nodeDir, `fragment_${fileId}.pdf`);
+
+  if (fs.existsSync(shardPath)) {
+    res.download(shardPath, `shard_${nodeId}_${fileId}.pdf`);
+  } else {
+    res.status(404).json({ error: "Fragment not found on this node" });
+  }
+});
+
 
 // --- 2. DELETION LOGIC ---
 
