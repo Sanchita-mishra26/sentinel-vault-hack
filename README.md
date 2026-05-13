@@ -38,4 +38,4 @@ Tech Stack
 *Intelligence & APIs:
 *LangChain & OpenRouter (Gemini / AI Inference)
 *Twilio SDK (Live SMS Alarms)
-*Socket.io (WebSocket Event Emitting)
+*Socket.io (WebSocket Event Emitting).
