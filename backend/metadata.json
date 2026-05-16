@@ -208,5 +208,33 @@
     ],
     "piiStatus": "skipped_or_failed",
     "threatLevel": "N/A"
+  },
+  "file-1778929049888": {
+    "originalName": "Sanchita_Mishra_Resume (1).pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1778929049888-Sanchita_Mishra_Resume (1).pdf",
+    "secretKey": "2503161d256ea76933079f983afd8adc802da330a5ba11e01e164eaab42d5cff",
+    "iv": "288ff1939d7a73485d87e507",
+    "authTag": "c183f9643099485bf5698d571ee151d0",
+    "shards": [
+      "enc-1778929049888-Sanchita_Mishra_Resume (1).pdf.part_0",
+      "enc-1778929049888-Sanchita_Mishra_Resume (1).pdf.part_1",
+      "enc-1778929049888-Sanchita_Mishra_Resume (1).pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
+  },
+  "file-1778929239530": {
+    "originalName": "Sanchita_Mishra_resume (2) (1) (1).pdf",
+    "encryptedPath": "C:\\final sentinel-vault\\sentinel-vault-hack\\backend\\uploads\\enc-1778929239530-Sanchita_Mishra_resume (2) (1) (1).pdf",
+    "secretKey": "99bbf66bbf51ecf7d534678fbd01326a7d34ec9fb8962101e86ac90d1c8ffa29",
+    "iv": "2462a7cb18284e42054798b9",
+    "authTag": "eb872b0ffe76b0010dcae758b375e0c0",
+    "shards": [
+      "enc-1778929239530-Sanchita_Mishra_resume (2) (1) (1).pdf.part_0",
+      "enc-1778929239530-Sanchita_Mishra_resume (2) (1) (1).pdf.part_1",
+      "enc-1778929239530-Sanchita_Mishra_resume (2) (1) (1).pdf.part_2"
+    ],
+    "piiStatus": "skipped_or_failed",
+    "threatLevel": "N/A"
   }
 }
