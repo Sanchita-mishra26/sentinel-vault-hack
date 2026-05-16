@@ -11,8 +11,6 @@ Zero-Knowledge Architecture: Files are encrypted via AES-256 before being shatte
 
 Self-Healing Reconstruction: Utilizing advanced Erasure Coding, the system can perfectly mathematically reconstruct the original file even if an entire storage node is destroyed or taken offline.
 Visual Sharding Demo: Capable of isolating and downloading single pdf-lib generated fragments to visually prove data decentralization.
-
-<<<<<<< HEAD
   Run `npm run dev` to start the development server.
 
   ## Demo
@@ -47,4 +45,4 @@ Tech Stack
 *LangChain & OpenRouter (Gemini / AI Inference)
 *Twilio SDK (Live SMS Alarms)
 *Socket.io (WebSocket Event Emitting).
->>>>>>> a6a76132e48a376569b315e7d754cbc28740de25
+
